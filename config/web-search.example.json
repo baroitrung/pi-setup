@@ -1,0 +1,23 @@
+{
+  "firecrawlBaseUrl": "https://api.firecrawl.dev",
+  "firecrawlApiKey": "!$HOME/.pi/agent/scripts/get-secret.sh FIRECRAWL_API_KEY",
+  "firecrawlApiVersion": "v2",
+  "firecrawlFreshScrape": false,
+  "fetchRouting": {
+    "providers": [
+      "http",
+      "firecrawl",
+      "crawl4ai",
+      "jina",
+      "tinyfish",
+      "search1api",
+      "querit",
+      "kagi",
+      "ollama",
+      "parallel",
+      "brightdata",
+      "gemini"
+    ],
+    "allowRemoteHostedProviders": true
+  }
+}

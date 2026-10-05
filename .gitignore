@@ -1,0 +1,42 @@
+# Secrets, caches, machine-local state
+
+# --- Secrets ---
+.env
+.env.*
+*.env
+!.env.example
+auth.json
+antigravity-accounts.json
+credentials.json
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+
+# --- Machine-local Pi state ---
+sessions/
+cache/
+crashes.json
+models-store.json
+mcp-onboarding.json
+pi-subagents/
+browser-profile*
+.git/
+bin/
+npm/
+git/
+
+# --- Backups produced by setup/install.sh ---
+*.backup.*
+*.backup
+
+# --- OS / editor noise ---
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.idea/
+.vscode/
+
+# --- Logs ---
+*.log

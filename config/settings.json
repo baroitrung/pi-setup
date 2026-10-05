@@ -1,0 +1,43 @@
+{
+  "lastChangelogVersion": "1.0.3",
+  "theme": "system",
+  "tuiMode": "regular",
+  "hideThinkingBlock": true,
+  "markdown": {
+    "mermaid": "streaming"
+  },
+  "quietStartup": true,
+  "packages": [
+    "npm:pi-antigravity",
+    "npm:pi-web-access",
+    "npm:pi-subagents",
+    "npm:@juicesharp/rpiv-ask-user-question",
+    "npm:@juicesharp/rpiv-todo",
+    "npm:@tintinweb/pi-subagents",
+    "npm:pi-memory",
+    "npm:pi-advisor-flow",
+    "npm:@tmustier/pi-session-recap",
+    "npm:pi-smart-fetch",
+    "npm:pi-browser-use",
+    "npm:pi-simplify",
+    "npm:pi-mcp-adapter",
+    "npm:pi-xai-oauth",
+    "npm:@latentminds/pi-quotas",
+    "git:github.com/ttttmr/pi-devin-oauth"
+  ],
+  "terminal": {
+    "imageWidthCells": 60
+  },
+  "images": {
+    "blockImages": true
+  },
+  "pi-browser-use": {
+    "executablePath": "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser"
+  },
+  "defaultProvider": "antigravity",
+  "defaultModel": "gemini-3.8-flash",
+  "defaultThinkingLevel": "high",
+  "extensions": [
+    "-builtin:mcp"
+  ]
+}
