@@ -349,19 +349,27 @@ const chipRow = (lines) => lines.find((line) => line.includes(GLYPH)) ?? "";
 	for (let i = 0; i < 10; i++) editor.handleInput("\x1b[D");
 	assert(!editor.render(100).join("").includes(GLYPH), "cursor at token start keeps it literal");
 	hardwareVisible = false;
-	assert(editor.render(100).join("").includes("\x1b[7m"), "disabling hardware mode restores the block fallback");
-	hardwareVisible = true;
+	assert(!editor.render(100).join("").includes("\x1b[7m"), "focused editor renews native mode after settings reset");
+	assert.equal(hardwareVisible, true, "runtime settings cannot disable the active beam");
+	const writes = cursorWrites.length;
+	editor.render(100);
+	assert.equal(cursorWrites.length, writes, "renewal is once per reset, not once per frame");
 }
 
 // Shutdown restores the previous visibility/default shape and is idempotent.
 // ---------------------------------------------------------------------------
 {
+	const staleEditor = build("hello");
 	handlers.get("session_shutdown")({ type: "session_shutdown", reason: "quit" });
 	assert.equal(hardwareVisible, false, "prior cursor visibility restored");
 	assert.equal(cursorWrites.at(-1), "\x1b[0 q", "terminal default shape restored");
 	const count = cursorWrites.length;
 	handlers.get("session_shutdown")({ type: "session_shutdown", reason: "quit" });
 	assert.equal(cursorWrites.length, count, "shutdown is idempotent");
+	assert.equal(hardwareVisible, false, "shutdown leaves native mode disabled");
+	staleEditor.render(100);
+	assert.equal(hardwareVisible, false, "a released editor cannot reactivate native mode");
+	assert.equal(cursorWrites.length, count, "no terminal writes from a stale editor");
 	const lines = render("/skill:git");
 	assert(Array.isArray(lines), "still renders after shutdown");
 }
@@ -392,9 +400,23 @@ for (const [label, Tui] of [["regular", TuiMainScreen], ["fullscreen", TuiAltScr
 	}).at(-1);
 	assert.equal(visibility(), "show", `${label}: the real TUI shows the cursor`);
 	assert(!events.join("").includes("\x1b[7m"), `${label}: no fake block written`);
+	// Pi reapplies persisted settings *after* session_start on /reload.
+	// showHardwareCursor defaults to false, so this used to undo enableBeam.
+	tui.setShowHardwareCursor(false);
+	events.length = 0;
+	tui.renderNow(true);
+	assert.equal(tui.getShowHardwareCursor(), true, `${label}: beam survives runtime settings reset`);
+	assert.equal(visibility(), "show", `${label}: native caret remains visible after reload settings`);
+	assert(!events.join("").includes("\x1b[7m"), `${label}: settings reset cannot restore the fake block`);
 	tui.setFocus(null);
+	tui.setShowHardwareCursor(false);
 	tui.renderNow(true);
 	assert.equal(visibility(), "hide", `${label}: releasing focus hides hardware cursor`);
+	assert.equal(tui.getShowHardwareCursor(), false, `${label}: inactive editor does not renew the cursor`);
+	tui.setFocus(editor);
+	tui.renderNow(true);
+	assert.equal(tui.getShowHardwareCursor(), true, `${label}: returning focus renews native mode`);
+	assert.equal(visibility(), "show", `${label}: caret is shown again`);
 	handlers.get("session_shutdown")({ type: "session_shutdown", reason: "quit" });
 	assert.equal(tui.getShowHardwareCursor(), false, `${label}: shutdown restores visibility`);
 	tui.stop();
