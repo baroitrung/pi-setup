@@ -166,7 +166,18 @@ export default function skillHighlightEditor(pi: ExtensionAPI) {
 	let releaseCursor: (() => void) | undefined;
 
 	const enableBeam = (tui: TUI): void => {
-		if (cursorTui === tui) return;
+		if (cursorTui === tui) {
+			// /reload reapplies persisted showHardwareCursor *after* session_start.
+			// Renew the active editor's cursor lease without replacing the original
+			// visibility captured for cleanup or writing controls on every frame.
+			try {
+				if (!tui.getShowHardwareCursor()) {
+					tui.terminal.write(BEAM_CURSOR);
+					tui.setShowHardwareCursor(true);
+				}
+			} catch { /* A failed renewal keeps the stock cursor fallback. */ }
+			return;
+		}
 		releaseCursor?.();
 		let previous: boolean;
 		try {
@@ -224,6 +235,9 @@ export default function skillHighlightEditor(pi: ExtensionAPI) {
 			// session can run in a different project than the agent was launched in.
 			if (Date.now() - loadedAt > 5000) refresh(this.cwd);
 
+			// Only renew while this editor is focused and still owns the lease:
+			// never reactivate a released runtime or steal focus from an overlay.
+			if (this.focused && cursorTui === this.tui) enableBeam(this.tui);
 			const lines = super.render(width);
 
 			let open: string | undefined;
