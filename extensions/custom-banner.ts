@@ -1,4 +1,5 @@
-import type { ExtensionAPI, Theme } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
+import { mixColors, parseColor, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { VERSION } from "@earendil-works/pi-coding-agent";
 
 const BANNER = [
@@ -6,11 +7,22 @@ const BANNER = [
 	"░▒█▒░█░█▒▀█▒█▒█░▒█▒░▀▄█░▒█▒░█▄▄▒░",
 ];
 
+const PALETTE = ["#22d3ee", "#60a5fa", "#a78bfa", "#f472b6", "#fb923c"].map(parseColor);
+
+function gradient(text: string, theme: Theme): string {
+	const chars = Array.from(text);
+	return chars.map((char, index) => {
+		const position = (index / Math.max(1, chars.length - 1)) * (PALETTE.length - 1);
+		const stop = Math.min(Math.floor(position), PALETTE.length - 2);
+		const color = mixColors(PALETTE[stop], PALETTE[stop + 1], position - stop, "srgb");
+		return theme.style(char, { fg: color, bold: true });
+	}).join("");
+}
+
 function center(text: string, width: number): string {
-	const visible = text.replace(/\x1b\[[0-9;]*m/g, "").length;
-	if (width <= visible) return text;
-	const pad = Math.floor((width - visible) / 2);
-	return " ".repeat(pad) + text;
+	const fitted = truncateToWidth(text, Math.max(0, width));
+	const pad = Math.max(0, Math.floor((width - visibleWidth(fitted)) / 2));
+	return " ".repeat(pad) + fitted;
 }
 
 class CustomBannerHeader {
@@ -31,12 +43,12 @@ class CustomBannerHeader {
 		const lines: string[] = [""];
 		const t = this.theme;
 
-		if (width >= 35) {
+		if (width >= Math.max(...BANNER.map(visibleWidth))) {
 			for (const line of BANNER) {
-				lines.push(center(t.fg("accent", line), width));
+				lines.push(center(gradient(line, t), width));
 			}
 		} else {
-			lines.push(center(t.bold(t.fg("accent", "◆ TINHTUTE ◆")), width));
+			lines.push(center(gradient("◆ TINHTUTE ◆", t), width));
 		}
 
 		lines.push("");
@@ -70,14 +82,14 @@ class CustomBannerHeader {
 		}
 
 		lines.push("");
-		return lines;
+		return lines.map((line) => truncateToWidth(line, Math.max(0, width)));
 	}
 }
 
 export default function (pi: ExtensionAPI) {
-	const applyHeader = (ctx: any) => {
+	const applyHeader = (ctx: ExtensionContext) => {
 		if (ctx.mode === "tui") {
-			ctx.ui.setHeader((_tui: any, theme: Theme) => new CustomBannerHeader(theme));
+			ctx.ui.setHeader((_tui, theme) => new CustomBannerHeader(theme));
 		}
 	};
 
