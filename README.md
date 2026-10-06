@@ -161,13 +161,34 @@ to switch between headers at runtime.
 **`custom-footer.ts`** — replaces the TUI footer with a compact, live statusline:
 
 ```text
- ✦ Opus 5.5 · low · ──────── 0% · ⌥ main
+ 👾 Opus 5.5 · low · ──────── 12% · ϟ 2.4k tpm · ★ 85% · ⌥ main
 ```
 
-Shows the current model, thinking level, context-window usage, and Git branch
-(omitted outside Git). The eight-cell bar turns yellow at 70% and red at 90%;
-unknown usage displays `?%`. Colors follow the active theme and the line truncates
-to fit the terminal. Adds `/custom-footer` and `/builtin-footer` to switch at
+Shows the current model in orange (palette 208) and thinking level in ANSI
+magenta, matching the Claude Code statusline, plus context usage and Git branch
+(omitted outside Git). Filled context-bar cells blend from green through cyan
+to red as usage increases; empty cells stay dim. The percentage matches the
+filled bar's endpoint: green at 0%, cyan at 60%, red at 90% and above, with smooth
+transitions between those stops.
+Unknown context usage displays a dim `?%`.
+
+The yellow `ϟ N tpm` segment shows the session-average input + output tokens per
+minute, using all recorded session usage and wall-clock time since the session
+header's creation timestamp. Cached read/write tokens are excluded. Idle time
+and time between closing and resuming a session count in the denominator; this
+is not output-only generation speed or Claude's own duration counter. The value
+updates on redraw, without a timer. It is hidden when tokens or valid elapsed
+time are unavailable, or the rate rounds down to zero. Formatting follows Claude:
+`999`, `1.0k`, `10k`.
+
+The `★` segment shows the latest assistant's
+cache hit rate on the active branch: `cacheRead / (input + cacheRead + cacheWrite)`.
+It is hidden until valid usage is available. Matching the Claude Code statusline,
+the rate is truncated to a whole percent, and the entire `★ N%` segment is dim
+when no tokens were read from cache, red below 70%, yellow from 70%, and green
+from 90%. A known zero hit rate displays `★ 0%`.
+Other colors follow the active theme and the line truncates to fit the terminal.
+Adds `/custom-footer` and `/builtin-footer` to switch at
 runtime. The compact footer hides the built-in cwd, usage/cost totals, and other
 extension statuses; `/builtin-footer` restores them.
 
@@ -187,36 +208,83 @@ With Pi installed, run from the repository root:
 node tests/test-custom-footer.mjs
 ```
 
-Verify the search template without credentials or network calls:
+Verify the search and package templates without credentials or network calls:
 
 ```bash
 node tests/test-web-search-config.mjs
+node tests/test-package-selection.mjs
 ```
 
 For npm or other install layouts, set `PI_NODE_MODULES` to the directory
 containing Pi's installed dependencies. Tests cover light/dark themes, context
-thresholds, narrow terminals, Unicode, live updates, commands, and subscription
-cleanup. After installing, run `/reload` in Pi to check both components visually.
+and cache thresholds, hidden unknown cache usage, session TPM and formatting,
+narrow terminals, emoji/Unicode, live updates, commands, and subscription cleanup.
+After installing, run `/reload` in Pi to check both components visually.
 
 ## Packages
 
-`config/settings.json` lists the Pi packages this setup expects. Pi installs
-them on start:
+`config/settings.json` lists the Pi packages this setup expects. Trim the list
+to what you actually use; Pi resolves configured packages on startup.
+
+### Diff review and LSP
+
+- `npm:pi-diff-review@0.1.27`: `/diff`, `/diff --cached`, `/diff main...HEAD`,
+  and `/view` for inline review comments.
+- `npm:pi-lsp-extension@1.4.0`: `/lsp` and language-intelligence tools.
+  Install the language server separately, for example `typescript-language-server`
+  plus `typescript` for JS/TS, or `jdtls` for Java. Without a server, supported
+  tools can fall back to tree-sitter syntax analysis; that is not type checking.
+
+These versions are pinned to the releases tested with Pi 1.0.4.
+
+### Selected mitsupi resources
+
+The npm release checked during setup did not contain `goal.ts`, `subagent.ts`,
+or all three themes. This template uses the GitHub source pinned to a tested
+commit, with resource filters rather than enabling the whole bundle:
 
 ```json
-"packages": [
-  "npm:pi-antigravity",
-  "npm:pi-web-access",
-  "npm:pi-subagents",
-  "npm:pi-memory",
-  "npm:pi-browser-use",
-  "npm:pi-smart-fetch",
-  "npm:pi-mcp-adapter"
-]
+{
+  "source": "git:github.com/mitsuhiko/agent-stuff@0865c849befd2021490679f96a8dee58c84ac857",
+  "extensions": [
+    "extensions/btw.ts",
+    "extensions/session-breakdown.ts",
+    "extensions/goal.ts",
+    "extensions/subagent.ts"
+  ],
+  "skills": ["skills/librarian", "skills/summarize"],
+  "themes": [
+    "themes/dayowl.json",
+    "themes/modern-dark.json",
+    "themes/nightowl.json"
+  ],
+  "prompts": []
+}
 ```
 
-Trim this list to what you actually use — every entry is downloaded and loaded
-at startup.
+- `/btw`: side-chat popover for tangential questions.
+- `/session-breakdown`: session usage, model, and cost analysis.
+- `/goal`: long-running objectives; use it explicitly rather than starting a
+  goal for every ordinary task.
+- `subagent` tool: one observable child Pi session at a time, backed by `tmux`.
+  Install `tmux` separately. The two legacy npm subagent packages are removed
+  from this template to avoid duplicate `subagent` registrations.
+- `/skill:librarian`: reusable remote repository checkouts.
+- `/skill:summarize`: document/URL-to-Markdown conversion through `uvx markitdown`.
+  Install `uv` separately. Its optional AI summary wrapper defaults to
+  `claude-haiku-4-5`, which needs an available model/account.
+- `dayowl`, `modern-dark`, `nightowl`: choose one in `/settings`. Merely installing
+  them leaves the current `system` theme unchanged.
+
+All other mitsupi extensions, skills, and prompt templates are excluded. In
+particular, this selection does not enable its tool replacements or auto-trust
+extension. Review third-party package source before installing it.
+
+For an existing installation, merge the package entries from the template into
+`~/.pi/agent/settings.json`, remove any legacy subagent packages, and run `/reload`.
+Do not run the installer with `--force` unless you intend to replace the whole
+settings file. Updating pinned packages requires deliberately changing their
+version or commit.
 
 ## Layout
 
@@ -237,6 +305,7 @@ pi-setup/
 │   └── install.sh
 └── tests/
     ├── test-custom-footer.mjs
+    ├── test-package-selection.mjs
     └── test-web-search-config.mjs
 ```
 
