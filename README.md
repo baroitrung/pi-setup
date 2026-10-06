@@ -22,7 +22,7 @@ bash setup/install.sh --dry-run
 
 | From | To | Notes |
 | :--- | :--- | :--- |
-| `extensions/*.ts` | `~/.pi/agent/extensions/` | Custom header banner, `$skill` autocomplete |
+| `extensions/*.ts` | `~/.pi/agent/extensions/` | Gradient header banner, compact statusline, `$skill` autocomplete |
 | `config/quotas.json` | `~/.pi/agent/extensions/` | Config for the `pi-quotas` package |
 | `scripts/get-secret.sh` | `~/.pi/agent/scripts/` | Reads one key from `~/.env`; mode `700` |
 | `config/advisor.json` | `~/.pi/agent/advisor.json` | Advisor model selection |
@@ -118,15 +118,44 @@ Config file: `~/.pi/agent/web-search.json`.
 
 ## Extensions
 
-**`custom-banner.ts`** — replaces the default TUI header with a custom banner.
-Adds `/custom-header` and `/builtin-header` to switch between them at runtime.
+**`custom-banner.ts`** — replaces the default TUI header with a gradient
+TINHTUTE banner. Centers and truncates using terminal display widths, with a
+compact fallback on narrow terminals. Adds `/custom-header` and `/builtin-header`
+to switch between headers at runtime.
+
+**`custom-footer.ts`** — replaces the TUI footer with a compact, live statusline:
+
+```text
+ ✦ Opus 5.5 · low · ──────── 0% · ⌥ main
+```
+
+Shows the current model, thinking level, context-window usage, and Git branch
+(omitted outside Git). The eight-cell bar turns yellow at 70% and red at 90%;
+unknown usage displays `?%`. Colors follow the active theme and the line truncates
+to fit the terminal. Adds `/custom-footer` and `/builtin-footer` to switch at
+runtime. The compact footer hides the built-in cwd, usage/cost totals, and other
+extension statuses; `/builtin-footer` restores them.
 
 **`dollar-skill.ts`** — types `$skill-name` and rewrites it to
 `/skill:skill-name` on submit, plus `$`-triggered autocomplete over installed
 skills.
 
-Both are plain TypeScript and are loaded directly from
-`~/.pi/agent/extensions/`.
+All three are plain TypeScript and are loaded directly from
+`~/.pi/agent/extensions/`. The header and footer activate automatically in TUI
+mode; no extra package or installer change is needed.
+
+### Verify the statusline
+
+With Pi installed, run from the repository root:
+
+```bash
+node tests/test-custom-footer.mjs
+```
+
+For npm or other install layouts, set `PI_NODE_MODULES` to the directory
+containing Pi's installed dependencies. Tests cover light/dark themes, context
+thresholds, narrow terminals, Unicode, live updates, commands, and subscription
+cleanup. After installing, run `/reload` in Pi to check both components visually.
 
 ## Packages
 
@@ -159,11 +188,14 @@ pi-setup/
 │   └── web-search.example.json
 ├── extensions/
 │   ├── custom-banner.ts
+│   ├── custom-footer.ts
 │   └── dollar-skill.ts
 ├── scripts/
 │   └── get-secret.sh
-└── setup/
-    └── install.sh
+├── setup/
+│   └── install.sh
+└── tests/
+    └── test-custom-footer.mjs
 ```
 
 ## Manual steps after install
@@ -186,6 +218,7 @@ Remove what was installed:
 
 ```bash
 rm ~/.pi/agent/extensions/custom-banner.ts
+rm ~/.pi/agent/extensions/custom-footer.ts
 rm ~/.pi/agent/extensions/dollar-skill.ts
 rm ~/.pi/agent/scripts/get-secret.sh
 rm ~/.pi/agent/advisor.json
