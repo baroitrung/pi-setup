@@ -232,8 +232,10 @@ unknown names are not painted.
 The same editor replaces Pi's simulated block cursor with a **steady vertical
 beam** using the terminal's native cursor (DECSCUSR). It preserves Pi's zero-width
 cursor marker and lets the TUI handle placement and focus, including IME and
-fullscreen/regular mode. No settings file or upstream Pi patch is needed. On
-reload/exit it restores the prior hardware-cursor visibility and requests the
+fullscreen/regular mode. A focused editor renews native cursor visibility if
+Pi reapplies persisted settings after `/reload`; an inactive or released editor
+does not. No settings file or upstream Pi patch is needed. On reload/exit it
+restores the prior hardware-cursor visibility and requests the
 terminal's default cursor shape. If the runtime APIs are unavailable, it keeps
 the stock block. The terminal must support DECSCUSR to display the beam.
 
