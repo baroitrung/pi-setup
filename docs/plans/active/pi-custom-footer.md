@@ -65,7 +65,8 @@ Installed Pi documentation and reference example were inspected:
 - Built-in footer can be restored without restarting Pi.
 - Banner changes remain untouched.
 
-## Verification results
+## Verification results (original implementation)
+These results describe the original footer design, not the current footer's emoji, gradient colors, TPM, and cache-hit additions.
 - `node scripts/test-custom-footer.mjs`: PASS for dark/light themes, exact example layout, live model/thinking/branch, all bar fill levels, percentage thresholds/clamping/unknown values, Unicode and widths 0–120, restore commands, non-TUI guards, branch rerender, and idempotent subscription cleanup.
 - `node --check scripts/test-custom-footer.mjs`: PASS.
 - `bash -n setup/install.sh`: PASS; existing installer already copies all `extensions/*.ts`, so no installer change needed.
@@ -75,6 +76,8 @@ Installed Pi documentation and reference example were inspected:
 - Managed work/check playbooks are absent; execution and gate used the locked plan and repo-local checks.
 
 ## Current State
-Created `extensions/custom-footer.ts` and repeatable verification script `scripts/test-custom-footer.mjs`. Copied the extension into `~/.pi/agent/extensions/custom-footer.ts` and verified it matches the repository file. No previous footer file needed backing up. Banner changes remain untouched. No commits made.
+The original footer implementation is already merged. The plan and standalone verification entry point are tracked in PR #4.
 
-Next action: user runs `/reload`, confirms the footer in the real TUI, changes model/thinking and Git branch, and tests `/builtin-footer` / `/custom-footer`. Automated checks passed; visual behavior in a real terminal is not yet verified. After that, consider `git` for committing the intended changes.
+The standalone script had drifted from the current footer: it lacked `sessionManager` mocks and asserted the obsolete layout/colors. `scripts/test-custom-footer.mjs` now imports the canonical `tests/test-custom-footer.mjs` suite instead of duplicating it. Both entry points pass in dark/light themes, including current layout, context gradients, TPM, cache hit, widths, Unicode, commands, and subscription cleanup. The compact-tools, web-search-config, and package-selection suites also pass; syntax and whitespace checks pass.
+
+Real TUI smoke testing remains pending: run `/reload`, change model/thinking and Git branch, and test `/builtin-footer` / `/custom-footer`. No runtime extension changes were needed for this test fix.
