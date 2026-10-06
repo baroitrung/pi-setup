@@ -1,7 +1,7 @@
 {
   "lastChangelogVersion": "1.0.3",
   "theme": "system",
-  "tuiMode": "regular",
+  "tuiMode": "fullscreen",
   "hideThinkingBlock": true,
   "markdown": {
     "mermaid": "streaming"
@@ -42,6 +42,8 @@
     "npm:pi-mcp-adapter",
     "npm:pi-xai-oauth",
     "npm:@latentminds/pi-quotas",
+    "npm:pi-cache-optimizer",
+    "npm:pi-context-view",
     "git:github.com/ttttmr/pi-devin-oauth"
   ],
   "terminal": {
