@@ -6,7 +6,7 @@ import {
 	type KeybindingsManager,
 	type Theme,
 } from "@earendil-works/pi-coding-agent";
-import { visibleWidth, type EditorTheme, type TUI } from "@earendil-works/pi-tui";
+import { CURSOR_MARKER, visibleWidth, type EditorTheme, type TUI } from "@earendil-works/pi-tui";
 
 /**
  * Inline skill chips in the prompt editor.
@@ -14,6 +14,10 @@ import { visibleWidth, type EditorTheme, type TUI } from "@earendil-works/pi-tui
  * A known invocation is drawn as a chip over the token it stands for:
  *
  *     /skill:think   ->   💡 think
+ *
+ * The focused editor uses the terminal's native steady vertical beam instead
+ * of Pi's simulated inverse-video block. Cursor geometry remains stock; the
+ * TUI owns positioning/focus and cleanup restores the terminal default shape.
  *
  * The chip is painted onto the *rendered* line, after the editor has laid it
  * out. Nothing is swapped into the editor's state and no part of its layout is
@@ -41,6 +45,10 @@ const ESCAPE = /^(?:\x1b\[[0-9;]*m|\x1b_pi:c\x07)/;
 
 /** The editor's fake cursor: the one place it sets inverse video. */
 const CURSOR = "\x1b[7m";
+
+/** DECSCUSR: steady vertical beam; reset to the terminal default on release. */
+const BEAM_CURSOR = "\x1b[6 q";
+const DEFAULT_CURSOR = "\x1b[0 q";
 
 /** A skill invocation as typed, in either the canonical form or the `$` alias. */
 const SKILL_TOKEN = /(?:\/skill:([a-zA-Z0-9-]+)|\$([a-zA-Z0-9-]+))/g;
@@ -103,9 +111,9 @@ function styled(raw: string, open: string): string {
  * The chip standing in for `token`, split into the painted part and the padding
  * that keeps the token's width, or `undefined` when it cannot fit.
  */
-function chipFor(token: string, name: string): { chip: string; pad: string } | undefined {
+function chipFor(invocation: string, name: string): { chip: string; pad: string } | undefined {
 	const chip = `${GLYPH} ${name}`;
-	const padding = token.length - visibleWidth(chip);
+	const padding = invocation.length - visibleWidth(chip);
 	if (padding < 0) return undefined;
 	return { chip, pad: " ".repeat(padding) };
 }
@@ -121,7 +129,8 @@ function chipFor(token: string, name: string): { chip: string; pad: string } | u
 function paintLine(line: string, known: Set<string>, open: string): string {
 	const { text, offsets } = plainIndex(line);
 
-	const cursorRaw = line.indexOf(CURSOR);
+	const markerRaw = line.indexOf(CURSOR_MARKER);
+	const cursorRaw = markerRaw >= 0 ? markerRaw : line.indexOf(CURSOR);
 	const cursorCol = cursorRaw < 0 ? -1 : plainIndex(line.slice(0, cursorRaw)).text.length;
 
 	let output = "";
@@ -140,7 +149,7 @@ function paintLine(line: string, known: Set<string>, open: string): string {
 		const rawEnd = offsets[lastChar] + ((text.codePointAt(lastChar) ?? 0) > 0xffff ? 2 : 1);
 		const raw = line.slice(rawStart, rawEnd);
 
-		const held = cursorCol > start && cursorCol < end;
+		const held = cursorCol >= start && cursorCol < end;
 		const chip = held ? undefined : chipFor(match[0], name);
 
 		output += line.slice(last, rawStart);
@@ -153,6 +162,33 @@ function paintLine(line: string, known: Set<string>, open: string): string {
 export default function skillHighlightEditor(pi: ExtensionAPI) {
 	let known = new Set<string>();
 	let loadedAt = 0;
+	let cursorTui: TUI | undefined;
+	let releaseCursor: (() => void) | undefined;
+
+	const enableBeam = (tui: TUI): void => {
+		if (cursorTui === tui) return;
+		releaseCursor?.();
+		let previous: boolean;
+		try {
+			previous = tui.getShowHardwareCursor();
+		} catch {
+			return; // Older/unsupported runtimes keep the stock block cursor.
+		}
+		const release = (): void => {
+			cursorTui = undefined;
+			releaseCursor = undefined;
+			try { tui.setShowHardwareCursor(previous); } catch { /* Cosmetic only. */ }
+			try { tui.terminal.write(DEFAULT_CURSOR); } catch { /* Terminal may have closed. */ }
+		};
+		try {
+			tui.terminal.write(BEAM_CURSOR);
+			tui.setShowHardwareCursor(true);
+			cursorTui = tui;
+			releaseCursor = release;
+		} catch {
+			release();
+		}
+	};
 
 	const refresh = (cwd: string): void => {
 		try {
@@ -191,20 +227,23 @@ export default function skillHighlightEditor(pi: ExtensionAPI) {
 			const lines = super.render(width);
 
 			let open: string | undefined;
+			try { open = this.style(); } catch { /* Cursor still works without a theme. */ }
+			let nativeCursor = false;
 			try {
-				open = this.style();
-			} catch {
-				return lines;
-			}
-			if (!open) return lines;
+				nativeCursor = cursorTui === this.tui && this.tui.getShowHardwareCursor();
+			} catch { /* Keep the block if the hardware cursor is unavailable. */ }
 
-			const style = open;
 			return lines.map((line) => {
+				let decorated = line;
 				try {
-					return paintLine(line, known, style);
-				} catch {
-					return line;
-				}
+					if (open) decorated = paintLine(line, known, open);
+				} catch { /* Keep the stock render on a highlighting failure. */ }
+				// Only remove the fake inverse cursor immediately following Pi's
+				// focused-editor marker. Keep its grapheme/reset, width and marker;
+				// the TUI positions/shows the real cursor and owns overlay focus.
+				return nativeCursor
+					? decorated.replace(`${CURSOR_MARKER}${CURSOR}`, CURSOR_MARKER)
+					: decorated;
 			});
 		}
 	}
@@ -231,12 +270,14 @@ export default function skillHighlightEditor(pi: ExtensionAPI) {
 			}
 		};
 
-		ctx.ui.setEditorComponent(
-			(tui, editorTheme, keybindings) => new SkillHighlightEditor(tui, editorTheme, keybindings, style, ctx.cwd),
-		);
+		ctx.ui.setEditorComponent((tui, editorTheme, keybindings) => {
+			enableBeam(tui);
+			return new SkillHighlightEditor(tui, editorTheme, keybindings, style, ctx.cwd);
+		});
 	});
 
 	pi.on("session_shutdown", () => {
+		releaseCursor?.();
 		known.clear();
 		loadedAt = 0;
 	});
