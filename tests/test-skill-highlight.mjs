@@ -19,7 +19,8 @@ const jiti = createJiti(import.meta.url, { alias: {
 	"@earendil-works/pi-tui": join(modules, "@earendil-works/pi-tui/dist/index.js"),
 } });
 
-const { stripTerminalSequences, visibleWidth } = await load(join(modules, "@earendil-works/pi-tui/dist/index.js"));
+const { CURSOR_MARKER, TuiMainScreen, TuiAltScreen, stripTerminalSequences, visibleWidth } =
+	await load(join(modules, "@earendil-works/pi-tui/dist/index.js"));
 const { CustomEditor } = await load(join(agent, "dist/index.js"));
 const { getEditorTheme, initTheme, loadThemeFromPath, setTheme, setTerminalColors, setThemeInstance, theme: activeTheme } =
 	await load(join(agent, "dist/modes/interactive/theme/theme.js"));
@@ -57,11 +58,19 @@ handlers.get("session_start")({}, {
 });
 assert.equal(nonTuiInstalls, 0, "does not replace the editor outside tui mode");
 
-const fakeTui = { terminal: { rows: 40 }, requestRender() {} };
+const cursorWrites = [];
+let hardwareVisible = false;
+const fakeTui = {
+	terminal: { rows: 40, write(data) { cursorWrites.push(data); } },
+	getShowHardwareCursor() { return hardwareVisible; },
+	setShowHardwareCursor(value) { hardwareVisible = value; },
+	requestRender() {},
+};
 const keybindings = KeybindingsManager.create();
 const build = (text) => {
 	const editor = factory(fakeTui, getEditorTheme(), keybindings);
 	editor.onSubmit = () => {};
+	editor.focused = true;
 	editor.setText(text);
 	return editor;
 };
@@ -164,10 +173,11 @@ const chipRow = (lines) => lines.find((line) => line.includes(GLYPH)) ?? "";
 	for (let i = 0; i < 4; i++) editor.handleInput("\x1b[D");
 	const lines = editor.render(100);
 	const raw = lines.join("");
-	assert(raw.includes("\x1b[7m"), "cursor sequence is present");
+	assert(raw.includes(CURSOR_MARKER), "hardware cursor marker is present");
+	assert(!raw.includes("\x1b[7m"), "the fake block cursor is removed");
 	assert(!raw.includes(GLYPH), "the token is not collapsed while the cursor is inside it");
 	assert(raw.includes(BG), "the token is highlighted instead");
-	const row = lines.find((line) => line.includes("\x1b[7m"));
+	const row = lines.find((line) => line.includes(CURSOR_MARKER));
 	assert(row.lastIndexOf("\x1b[0m") > row.lastIndexOf(BG), "the cursor row ends with the style closed");
 }
 
@@ -177,17 +187,18 @@ const chipRow = (lines) => lines.find((line) => line.includes(GLYPH)) ?? "";
 {
 	const editor = build("/skill:git");
 	for (let i = 0; i < 4; i++) editor.handleInput("\x1b[D");
-	const row = editor.render(100).find((line) => line.includes("\x1b[7m"));
-	assert(row.includes("\x1b[7m"), "the cursor is drawn");
+	const row = editor.render(100).find((line) => line.includes(CURSOR_MARKER));
+	assert(row.includes(CURSOR_MARKER), "the native cursor is positioned");
+	assert(!row.includes("\x1b[7m"), "no fake block remains");
 	// After the cursor's reset the background must be re-opened, so the tail of
 	// the token is still painted.
-	const afterCursor = row.slice(row.indexOf("\x1b[7m"));
+	const afterCursor = row.slice(row.indexOf(CURSOR_MARKER));
 	assert(afterCursor.includes(BG), "the background is re-opened after the cursor's reset");
 }
 
 // ---------------------------------------------------------------------------
-// Cursor at the very end of the token: the chip appears, and the cursor's
-// highlighted space is still where it was.
+// At the very end of the invocation the chip appears, and the hardware cursor
+// marker stays at the original cell.
 // ---------------------------------------------------------------------------
 {
 	const editor = build("/skill:git");
@@ -195,7 +206,8 @@ const chipRow = (lines) => lines.find((line) => line.includes(GLYPH)) ?? "";
 	const row = chipRow(lines);
 	assert(row.includes(GLYPH), "the chip appears once the cursor clears the token");
 	assert(editor.state.cursorCol === 10, "the cursor is at the end of the token");
-	assert(row.includes("\x1b[7m"), "the cursor is still drawn after the chip");
+	assert(row.includes(CURSOR_MARKER), "the hardware cursor remains after the chip");
+	assert(!row.includes("\x1b[7m"), "there is no second block cursor");
 }
 
 // ---------------------------------------------------------------------------
@@ -305,13 +317,150 @@ const chipRow = (lines) => lines.find((line) => line.includes(GLYPH)) ?? "";
 }
 
 // ---------------------------------------------------------------------------
-// Shutdown clears state and the extension stays quiet.
+// Native cursor: setup is once per TUI, no writes during render, and cursor
+// columns agree with stock for start/end, wrapping, wide/combining graphemes.
 // ---------------------------------------------------------------------------
 {
+	assert(hardwareVisible, "the native cursor is enabled without changing settings");
+	assert.equal(cursorWrites.filter((data) => data === "\x1b[6 q").length, 1, "beam selected once");
+	for (const text of ["", "hello", "日本語", "e\u0301 hello", "/skill:git", "/skill:git hello", "$think"]) {
+		for (const width of [20, 40, 100]) {
+			const editor = build(text);
+			const baseline = stock(text);
+			baseline.focused = true;
+			for (let left = 0; left <= [...text].length; left++) {
+				const actual = editor.render(width);
+				const expected = baseline.render(width);
+				const cursor = (lines) => {
+					const row = lines.findIndex((line) => line.includes(CURSOR_MARKER));
+					assert(row >= 0, "focused editor retains the marker");
+					return [row, visibleWidth(lines[row].slice(0, lines[row].indexOf(CURSOR_MARKER)))];
+				};
+				assert.deepEqual(cursor(actual), cursor(expected), `${text} @ ${width}: cursor cell matches stock`);
+				assert(!actual.join("").includes("\x1b[7m"), "only the native caret remains");
+				assert.deepEqual(actual.map(visibleWidth), expected.map(visibleWidth), "row geometry matches");
+				editor.handleInput("\x1b[D");
+				baseline.handleInput("\x1b[D");
+			}
+		}
+	}
+	assert.equal(cursorWrites.length, 1, "renders do not write terminal controls");
+	const editor = build("/skill:git");
+	for (let i = 0; i < 10; i++) editor.handleInput("\x1b[D");
+	assert(!editor.render(100).join("").includes(GLYPH), "cursor at token start keeps it literal");
+	hardwareVisible = false;
+	assert(!editor.render(100).join("").includes("\x1b[7m"), "focused editor renews native mode after settings reset");
+	assert.equal(hardwareVisible, true, "runtime settings cannot disable the active beam");
+	const writes = cursorWrites.length;
+	editor.render(100);
+	assert.equal(cursorWrites.length, writes, "renewal is once per reset, not once per frame");
+}
+
+// Shutdown restores the previous visibility/default shape and is idempotent.
+// ---------------------------------------------------------------------------
+{
+	const staleEditor = build("hello");
 	handlers.get("session_shutdown")({ type: "session_shutdown", reason: "quit" });
+	assert.equal(hardwareVisible, false, "prior cursor visibility restored");
+	assert.equal(cursorWrites.at(-1), "\x1b[0 q", "terminal default shape restored");
+	const count = cursorWrites.length;
+	handlers.get("session_shutdown")({ type: "session_shutdown", reason: "quit" });
+	assert.equal(cursorWrites.length, count, "shutdown is idempotent");
+	assert.equal(hardwareVisible, false, "shutdown leaves native mode disabled");
+	staleEditor.render(100);
+	assert.equal(hardwareVisible, false, "a released editor cannot reactivate native mode");
+	assert.equal(cursorWrites.length, count, "no terminal writes from a stale editor");
 	const lines = render("/skill:git");
 	assert(Array.isArray(lines), "still renders after shutdown");
 }
 
-console.log("PASS skill-highlight-editor: chip substitution, width preservation, cursor-inside, "
-	+ "geometry parity at every width, themes, hostile input");
+// Real TUI integration in regular/fullscreen mode. The TUI, not the extension,
+// positions and shows the native cursor and hides it when focus is released.
+for (const [label, Tui] of [["regular", TuiMainScreen], ["fullscreen", TuiAltScreen]]) {
+	const events = [];
+	const terminal = {
+		rows: 30, columns: 80, kittyProtocolActive: false,
+		start() {}, stop() {}, drainInput: async () => {},
+		write(data) { events.push(data); },
+		showCursor() { events.push("show"); }, hideCursor() { events.push("hide"); },
+		moveBy() {}, clearLine() {}, clearFromCursor() {}, clearScreen() {}, setTitle() {}, setProgress() {},
+	};
+	const tui = new Tui(terminal, false);
+	const editor = factory(tui, getEditorTheme(), keybindings);
+	editor.setText("/skill:git hello");
+	if (label === "fullscreen") tui.setLayoutRoot(editor);
+	else tui.addChild(editor);
+	tui.setFocus(editor);
+	tui.start();
+	tui.renderNow(true);
+	assert(events.includes("\x1b[6 q"), `${label}: vertical beam requested`);
+	const visibility = () => events.flatMap((event) => {
+		if (event === "show" || event === "hide") return [event];
+		return [...event.matchAll(/\x1b\[\?25([hl])/g)].map((match) => match[1] === "h" ? "show" : "hide");
+	}).at(-1);
+	assert.equal(visibility(), "show", `${label}: the real TUI shows the cursor`);
+	assert(!events.join("").includes("\x1b[7m"), `${label}: no fake block written`);
+	// Pi reapplies persisted settings *after* session_start on /reload.
+	// showHardwareCursor defaults to false, so this used to undo enableBeam.
+	tui.setShowHardwareCursor(false);
+	events.length = 0;
+	tui.renderNow(true);
+	assert.equal(tui.getShowHardwareCursor(), true, `${label}: beam survives runtime settings reset`);
+	assert.equal(visibility(), "show", `${label}: native caret remains visible after reload settings`);
+	assert(!events.join("").includes("\x1b[7m"), `${label}: settings reset cannot restore the fake block`);
+	tui.setFocus(null);
+	tui.setShowHardwareCursor(false);
+	tui.renderNow(true);
+	assert.equal(visibility(), "hide", `${label}: releasing focus hides hardware cursor`);
+	assert.equal(tui.getShowHardwareCursor(), false, `${label}: inactive editor does not renew the cursor`);
+	tui.setFocus(editor);
+	tui.renderNow(true);
+	assert.equal(tui.getShowHardwareCursor(), true, `${label}: returning focus renews native mode`);
+	assert.equal(visibility(), "show", `${label}: caret is shown again`);
+	handlers.get("session_shutdown")({ type: "session_shutdown", reason: "quit" });
+	assert.equal(tui.getShowHardwareCursor(), false, `${label}: shutdown restores visibility`);
+	tui.stop();
+}
+
+// Theme failure must not disable the caret. Unsupported terminal APIs must keep
+// the stock block rather than silently remove the only visible cursor.
+{
+	const isolated = (theme) => {
+		const hooks = new Map();
+		let create;
+		extension({ on: (name, fn) => hooks.set(name, fn) });
+		hooks.get("session_start")({}, {
+			mode: "tui", cwd: process.cwd(), ui: { theme, setEditorComponent(fn) { create = fn; } },
+		});
+		return { hooks, create };
+	};
+	const brokenTheme = isolated({});
+	const editor = brokenTheme.create(fakeTui, getEditorTheme(), keybindings);
+	editor.focused = true;
+	editor.setText("hello");
+	assert(!editor.render(40).join("").includes("\x1b[7m"), "theme failure still uses native caret");
+	brokenTheme.hooks.get("session_shutdown")({});
+
+	hardwareVisible = true;
+	const alreadyVisible = isolated(activeTheme);
+	alreadyVisible.create(fakeTui, getEditorTheme(), keybindings);
+	alreadyVisible.hooks.get("session_shutdown")({});
+	assert.equal(hardwareVisible, true, "an originally enabled hardware cursor stays enabled");
+	hardwareVisible = false;
+
+	for (const tui of [
+		{ terminal: { rows: 40 }, requestRender() {} },
+		{ terminal: { rows: 40, write() { throw new Error("closed"); } },
+			getShowHardwareCursor() { return false; }, setShowHardwareCursor() {}, requestRender() {} },
+	]) {
+		const session = isolated(activeTheme);
+		const editor = session.create(tui, getEditorTheme(), keybindings);
+		editor.focused = true;
+		editor.setText("hello");
+		assert(editor.render(40).join("").includes("\x1b[7m"), "unsupported runtime keeps block fallback");
+		assert.doesNotThrow(() => session.hooks.get("session_shutdown")({}), "cleanup is best effort");
+	}
+}
+
+console.log("PASS skill-highlight-editor: chips, geometry, native beam cursor, lifecycle, "
+	+ "regular/fullscreen focus, fallback, themes, hostile input");

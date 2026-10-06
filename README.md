@@ -220,24 +220,30 @@ and `/reload` to restore the normal preview layout.
 `/skill:skill-name` on submit, plus `$`-triggered autocomplete over installed
 skills.
 
-**`skill-highlight-editor.ts`** — paints `/skill:<name>` and `$<name>` inline in
-the prompt, using the same `customMessageBg` Pi gives the `[skill]` block in the
-transcript, so the prompt and the transcript read as one idea. Names resolve
-against the real skill registry, so an unknown `$foo` is never painted.
+**`skill-highlight-editor.ts`** — draws known `/skill:<name>` invocations as bold
+teal `💡 name` chips on `customMessageBg`, after the stock editor lays out the
+prompt. The submitted text is unchanged. Four unpainted spaces preserve each
+canonical token's original footprint, so following text and the caret keep their
+columns. While editing inside a token (including its first character), it stays
+literal and highlighted. `$<name>` aliases stay literal because the bulb chip
+would be wider than the alias. Names resolve against the real skill registry;
+unknown names are not painted.
 
-Pi's default editor renders its text as plain characters — the only escapes it
-emits around content are `\x1b[7m`/`\x1b[0m` for the cursor and a zero-width
-hardware-cursor marker. That makes the editor line a clean surface to decorate:
-no existing foreground color has to be preserved, and the cursor's own `\x1b[0m`
-is handled by re-opening the background after it, so a cursor parked inside a
-token does not cut the highlight short. Token positions are found in the plain
-text and mapped back to raw offsets, so a cursor splitting a token cannot defeat
-the match. Row geometry is asserted equal to the stock editor's, including at
-widths where the stock editor already overflows.
+The same editor replaces Pi's simulated block cursor with a **steady vertical
+beam** using the terminal's native cursor (DECSCUSR). It preserves Pi's zero-width
+cursor marker and lets the TUI handle placement and focus, including IME and
+fullscreen/regular mode. A focused editor renews native cursor visibility if
+Pi reapplies persisted settings after `/reload`; an inactive or released editor
+does not. No settings file or upstream Pi patch is needed. On reload/exit it
+restores the prior hardware-cursor visibility and requests the
+terminal's default cursor shape. If the runtime APIs are unavailable, it keeps
+the stock block. The terminal must support DECSCUSR to display the beam.
 
-This replaces the editor component, so it also passes `embedWorkingStatus`
-through to keep the working indicator in the editor's top border. The highlight
-is cosmetic: every failure path returns the stock render untouched.
+This replaces the editor component and passes `embedWorkingStatus` through to
+keep the working indicator in the editor's top border. Highlighting failures
+fall back to the stock text; cursor handling works independently of the theme.
+Tests verify row geometry, cursor cells, focus and cleanup against real Pi TUI
+classes. Wrapped tokens without a complete match stay literal.
 
 **`skill-invoke-chip.ts`** — shows a skill invocation banner above the editor
 whenever the prompt holds a skill invocation:
