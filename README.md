@@ -22,7 +22,7 @@ bash setup/install.sh --dry-run
 
 | From | To | Notes |
 | :--- | :--- | :--- |
-| `extensions/*.ts` | `~/.pi/agent/extensions/` | Gradient header banner, compact statusline, `$skill` autocomplete |
+| `extensions/*.ts` | `~/.pi/agent/extensions/` | Gradient banner, compact statusline/tool calls, `$skill` autocomplete |
 | `config/quotas.json` | `~/.pi/agent/extensions/` | Config for the `pi-quotas` package |
 | `scripts/get-secret.sh` | `~/.pi/agent/scripts/` | Reads one key from `~/.env`; mode `700` |
 | `config/advisor.json` | `~/.pi/agent/advisor.json` | Advisor model selection |
@@ -192,13 +192,37 @@ Adds `/custom-footer` and `/builtin-footer` to switch at
 runtime. The compact footer hides the built-in cwd, usage/cost totals, and other
 extension statuses; `/builtin-footer` restores them.
 
+**`compact-tools.ts`** — displays each tool call as one truncated line by default:
+
+```text
+▸ read extensions/custom-footer.ts
+▸ bash npm test
+```
+
+In fullscreen mode, click the tool header after a result arrives to expand it;
+click again to collapse it. `Ctrl+O` expands/collapses all tools and also works
+in regular terminal mode. Expanded output uses one padded `Box` layout with a
+neutral tint blended at 30% over Pi's reported terminal background (ANSI has no
+actual alpha channel). Its straight border uses edge-aligned strokes so the
+interior meets the border without painting border cells; centered rounded glyphs
+cannot provide pixel-perfect clipping in a character-cell TUI. Native background
+layers are flattened into this one surface; foreground syntax/diff colors remain
+unchanged. The summary header and collapsed calls keep the terminal background.
+Expanded calls reuse the original built-in or plugin renderers, including edit
+diffs and write contents. Unknown tools fall back to
+plain arguments/output. Collapsed errors are marked, and streaming calls remain
+compact. This changes presentation only, not tool execution or model-visible
+results. Pi's native inline image panels are outside the renderer and can still
+appear when image display is enabled. Disable this extension through `pi config`
+and `/reload` to restore the normal preview layout.
+
 **`dollar-skill.ts`** — types `$skill-name` and rewrites it to
 `/skill:skill-name` on submit, plus `$`-triggered autocomplete over installed
 skills.
 
-All three are plain TypeScript and are loaded directly from
-`~/.pi/agent/extensions/`. The header and footer activate automatically in TUI
-mode; no extra package or installer change is needed.
+All four are plain TypeScript and are loaded directly from
+`~/.pi/agent/extensions/`. The header, footer, and initial tool-folding state
+activate automatically in TUI mode; no extra package or installer change is needed.
 
 ### Verify the statusline
 
@@ -206,6 +230,7 @@ With Pi installed, run from the repository root:
 
 ```bash
 node tests/test-custom-footer.mjs
+node tests/test-compact-tools.mjs
 ```
 
 Verify the search and package templates without credentials or network calls:
@@ -296,6 +321,7 @@ pi-setup/
 │   ├── settings.json
 │   └── web-search.example.json
 ├── extensions/
+│   ├── compact-tools.ts
 │   ├── custom-banner.ts
 │   ├── custom-footer.ts
 │   └── dollar-skill.ts
@@ -304,6 +330,7 @@ pi-setup/
 ├── setup/
 │   └── install.sh
 └── tests/
+    ├── test-compact-tools.mjs
     ├── test-custom-footer.mjs
     ├── test-package-selection.mjs
     └── test-web-search-config.mjs
@@ -329,6 +356,7 @@ and `models-store.json` are machine-local state and are gitignored.
 Remove what was installed:
 
 ```bash
+rm ~/.pi/agent/extensions/compact-tools.ts
 rm ~/.pi/agent/extensions/custom-banner.ts
 rm ~/.pi/agent/extensions/custom-footer.ts
 rm ~/.pi/agent/extensions/dollar-skill.ts
