@@ -1,4 +1,12 @@
 {
+  "webSearch": {
+    "allowedProviders": ["tinyfish", "firecrawl"]
+  },
+  "searchRouting": {
+    "providers": ["tinyfish", "firecrawl"],
+    "fallbackOn": ["transient", "quota", "network", "invalid-response"]
+  },
+  "tinyfishApiKey": "!$HOME/.pi/agent/scripts/get-secret.sh TINYFISH_API_KEY",
   "firecrawlBaseUrl": "https://api.firecrawl.dev",
   "firecrawlApiKey": "!$HOME/.pi/agent/scripts/get-secret.sh FIRECRAWL_API_KEY",
   "firecrawlApiVersion": "v2",
