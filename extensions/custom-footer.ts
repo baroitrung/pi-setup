@@ -1,11 +1,58 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { truncateToWidth } from "@earendil-works/pi-tui";
+import { mixColors, parseColor, truncateToWidth } from "@earendil-works/pi-tui";
 
 const BAR_CELLS = 8;
+const MODEL_COLOR = parseColor(208);
+const EFFORT_COLOR = parseColor(5); // ANSI magenta (SGR 35), matching Claude's statusline.
+const TPM_COLOR = parseColor(11); // Bright yellow (SGR 93).
+const CONTEXT_GREEN = parseColor("#4ade80");
+const CONTEXT_CYAN = parseColor("#22d3ee");
+const CONTEXT_RED = parseColor("#f87171");
+
+function contextColor(percent: number) {
+	if (percent <= 60) return mixColors(CONTEXT_GREEN, CONTEXT_CYAN, percent / 60, "srgb");
+	return mixColors(CONTEXT_CYAN, CONTEXT_RED, Math.min(1, (percent - 60) / 30), "srgb");
+}
 
 // Model names and branch names are labels, never terminal control sequences.
 function label(text: string): string {
 	return text.replace(/[\x00-\x1f\x7f-\x9f]/g, "");
+}
+
+function latestCacheHitRate(ctx: ExtensionContext): number | undefined {
+	const entries = ctx.sessionManager.getBranch();
+	for (let i = entries.length - 1; i >= 0; i--) {
+		const entry = entries[i];
+		if (entry.type !== "message" || entry.message.role !== "assistant") continue;
+		const usage = entry.message.usage;
+		if (!usage) return undefined;
+		const tokens = [usage.input, usage.cacheRead, usage.cacheWrite];
+		if (!tokens.every((value) => Number.isFinite(value) && value >= 0)) return undefined;
+		const total = usage.input + usage.cacheRead + usage.cacheWrite;
+		if (total <= 0 || !Number.isFinite(total)) return undefined;
+		const hit = (usage.cacheRead * 100) / total;
+		return Number.isFinite(hit) ? hit : undefined;
+	}
+	return undefined;
+}
+
+function totalSessionTokens(ctx: ExtensionContext): number {
+	let total = 0;
+	for (const entry of ctx.sessionManager.getEntries()) {
+		const usage = entry.type === "message"
+			? (entry.message.role === "assistant" || entry.message.role === "toolResult" ? entry.message.usage : undefined)
+			: (entry.type === "usage" || entry.type === "compaction" || entry.type === "branch_summary" ? entry.usage : undefined);
+		if (usage && [usage.input, usage.output].every((value) => Number.isFinite(value) && value >= 0)) {
+			total += usage.input + usage.output;
+		}
+	}
+	return Number.isFinite(total) ? total : 0;
+}
+
+function formatTpm(tpm: number): string {
+	if (tpm >= 10000) return `${Math.floor(tpm / 1000)}k`;
+	if (tpm >= 1000) return `${Math.floor(tpm / 1000)}.${Math.floor((tpm % 1000) / 100)}k`;
+	return String(tpm);
 }
 
 export default function (pi: ExtensionAPI) {
@@ -20,9 +67,14 @@ export default function (pi: ExtensionAPI) {
 				pi.on("thinking_level_select", requestRender),
 			];
 			let disposed = false;
+			let cacheSession: string | undefined;
+			let cacheLeaf: string | null | undefined;
+			let cacheHit: number | undefined;
+			let tokenTotal = 0;
+			let sessionStartedAt = NaN;
 
 			return {
-				invalidate() {},
+				invalidate() { cacheSession = undefined; },
 				dispose() {
 					if (disposed) return;
 					disposed = true;
@@ -37,15 +89,37 @@ export default function (pi: ExtensionAPI) {
 						: undefined;
 					const filled = Math.round(((percent ?? 0) / 100) * BAR_CELLS);
 					const bar = "━".repeat(filled) + "─".repeat(BAR_CELLS - filled);
-					const contextColor = percent === undefined ? "dim"
-						: percent >= 90 ? "error" : percent >= 70 ? "warning" : "success";
-					const context = `${bar} ${percent === undefined ? "?" : Math.round(percent)}%`;
+					const context = percent === undefined ? theme.fg("dim", `${bar} ?%`)
+						: Array.from({ length: filled }, (_, index) => theme.style("━", {
+							fg: contextColor(filled === 1 ? percent : (index / (filled - 1)) * percent),
+						})).join("") + theme.fg("dim", "─".repeat(BAR_CELLS - filled))
+							+ " " + theme.style(`${Math.round(percent)}%`, { fg: contextColor(percent) });
 					const separator = theme.fg("dim", " · ");
 					const parts = [
-						theme.bold(theme.fg("accent", `✦ ${model}`)),
-						theme.fg("muted", thinking),
-						theme.fg(contextColor, context),
+						theme.style(`👾 ${model}`, { fg: MODEL_COLOR, bold: true }),
+						theme.style(thinking, { fg: EFFORT_COLOR }),
+						context,
 					];
+					const session = ctx.sessionManager.getSessionId();
+					const leaf = ctx.sessionManager.getLeafId();
+					if (session !== cacheSession || leaf !== cacheLeaf) {
+						cacheHit = latestCacheHitRate(ctx);
+						tokenTotal = totalSessionTokens(ctx);
+						sessionStartedAt = Date.parse(ctx.sessionManager.getHeader()?.timestamp ?? "");
+						cacheSession = session;
+						cacheLeaf = leaf;
+					}
+					const elapsed = Date.now() - sessionStartedAt;
+					const tpm = elapsed > 0 ? Math.floor((tokenTotal * 60000) / elapsed) : 0;
+					if (Number.isFinite(tpm) && tpm > 0) {
+						parts.push(`${theme.style("ϟ", { fg: TPM_COLOR })} ${theme.fg("dim", `${formatTpm(tpm)} tpm`)}`);
+					}
+					if (cacheHit !== undefined) {
+						const hit = Math.floor(cacheHit);
+						const color = cacheHit === 0 ? "dim"
+							: hit >= 90 ? "success" : hit >= 70 ? "warning" : "error";
+						parts.push(theme.fg(color, `★ ${hit}%`));
+					}
 					const branch = footerData.getGitBranch();
 					if (branch) parts.push(theme.fg("syntaxVariable", `⌥ ${label(branch)}`));
 
@@ -58,7 +132,7 @@ export default function (pi: ExtensionAPI) {
 	pi.on("session_start", (_event, ctx) => applyFooter(ctx));
 
 	pi.registerCommand("custom-footer", {
-		description: "Show compact model, thinking, context, and Git footer",
+		description: "Show compact model, thinking, context, TPM, cache hit, and Git footer",
 		handler: async (_args, ctx) => {
 			if (ctx.mode !== "tui") return;
 			applyFooter(ctx);
