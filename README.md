@@ -220,7 +220,46 @@ and `/reload` to restore the normal preview layout.
 `/skill:skill-name` on submit, plus `$`-triggered autocomplete over installed
 skills.
 
-All four are plain TypeScript and are loaded directly from
+**`skill-highlight-editor.ts`** — paints `/skill:<name>` and `$<name>` inline in
+the prompt, using the same `customMessageBg` Pi gives the `[skill]` block in the
+transcript, so the prompt and the transcript read as one idea. Names resolve
+against the real skill registry, so an unknown `$foo` is never painted.
+
+Pi's default editor renders its text as plain characters — the only escapes it
+emits around content are `\x1b[7m`/`\x1b[0m` for the cursor and a zero-width
+hardware-cursor marker. That makes the editor line a clean surface to decorate:
+no existing foreground color has to be preserved, and the cursor's own `\x1b[0m`
+is handled by re-opening the background after it, so a cursor parked inside a
+token does not cut the highlight short. Token positions are found in the plain
+text and mapped back to raw offsets, so a cursor splitting a token cannot defeat
+the match. Row geometry is asserted equal to the stock editor's, including at
+widths where the stock editor already overflows.
+
+This replaces the editor component, so it also passes `embedWorkingStatus`
+through to keep the working indicator in the editor's top border. The highlight
+is cosmetic: every failure path returns the stock render untouched.
+
+**`skill-invoke-chip.ts`** — shows a skill invocation banner above the editor
+whenever the prompt holds a skill invocation:
+
+```text
+💡 git · check · think +2 | SWE-2 · max
+```
+
+A teal `💡` invocation marker, skill names in the label colour capped at three
+with a `+N` overflow, then a dim `|` and the live session state (model ·
+thinking level, falling back to the configured defaults). Everything sits on the
+`customMessageBg` surface Pi already gives the `[skill]` block, so the inline
+prompt and the transcript read as one idea rather than two visual languages.
+
+This is the public-API companion to `skill-highlight-editor.ts`. It cannot paint
+inline text, but it replaces no editor and does no ANSI work, so it keeps working
+regardless of how the editor is implemented. It recognises both `/skill:<name>`
+and the `$<name>` alias, and only rewrites the widget when the chip actually
+changes — widget writes re-render the transcript. Use either extension or both;
+they do not conflict.
+
+All six are plain TypeScript and are loaded directly from
 `~/.pi/agent/extensions/`. The header, footer, and initial tool-folding state
 activate automatically in TUI mode; no extra package or installer change is needed.
 
@@ -231,6 +270,8 @@ With Pi installed, run from the repository root:
 ```bash
 node tests/test-custom-footer.mjs
 node tests/test-compact-tools.mjs
+node tests/test-skill-highlight.mjs
+node tests/test-skill-invoke-chip.mjs
 ```
 
 Verify the search and package templates without credentials or network calls:
@@ -324,7 +365,9 @@ pi-setup/
 │   ├── compact-tools.ts
 │   ├── custom-banner.ts
 │   ├── custom-footer.ts
-│   └── dollar-skill.ts
+│   ├── dollar-skill.ts
+│   ├── skill-highlight-editor.ts
+│   └── skill-invoke-chip.ts
 ├── scripts/
 │   └── get-secret.sh
 ├── setup/
@@ -333,6 +376,8 @@ pi-setup/
     ├── test-compact-tools.mjs
     ├── test-custom-footer.mjs
     ├── test-package-selection.mjs
+    ├── test-skill-highlight.mjs
+    ├── test-skill-invoke-chip.mjs
     └── test-web-search-config.mjs
 ```
 
@@ -360,6 +405,8 @@ rm ~/.pi/agent/extensions/compact-tools.ts
 rm ~/.pi/agent/extensions/custom-banner.ts
 rm ~/.pi/agent/extensions/custom-footer.ts
 rm ~/.pi/agent/extensions/dollar-skill.ts
+rm ~/.pi/agent/extensions/skill-highlight-editor.ts
+rm ~/.pi/agent/extensions/skill-invoke-chip.ts
 rm ~/.pi/agent/scripts/get-secret.sh
 rm ~/.pi/agent/advisor.json
 ```
