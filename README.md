@@ -86,8 +86,41 @@ TINYFISH_API_KEY=sk-tinyfish-xxxxxxxx
 
 ## Web search providers
 
-`config/web-search.example.json` enables Firecrawl and keeps the default fetch
-provider order. Before using it, read these two fields:
+`config/web-search.example.json` restricts search to **TinyFish first, Firecrawl
+as fallback**. Both credentials use `get-secret.sh` to read `~/.env` on demand;
+no keys are stored in the config. The existing fetch provider order is unchanged.
+
+Search falls back only on transient, quota, network, or invalid-response errors.
+An explicit provider request stays strict; it does not use the fallback route.
+The search allowlist also rejects explicit requests for other providers.
+
+For an existing installation, merge these fields into
+`~/.pi/agent/web-search.json` (keep the rest of your config):
+
+```json
+{
+  "webSearch": {
+    "allowedProviders": ["tinyfish", "firecrawl"]
+  },
+  "searchRouting": {
+    "providers": ["tinyfish", "firecrawl"],
+    "fallbackOn": ["transient", "quota", "network", "invalid-response"]
+  },
+  "tinyfishApiKey": "!$HOME/.pi/agent/scripts/get-secret.sh TINYFISH_API_KEY",
+  "firecrawlApiKey": "!$HOME/.pi/agent/scripts/get-secret.sh FIRECRAWL_API_KEY"
+}
+```
+
+Remove top-level `provider` and `searchProvider` fields if present: they override
+`searchRouting`. Run `/reload` after changing the config. The installer leaves
+existing live config untouched unless you pass `--force`, which overwrites the
+whole file rather than merging it.
+
+Exporting keys inside Pi's bash tool does not update Pi's own environment. With
+the command credential sources above, exports and restarts are not needed when
+adding or rotating a key in `~/.env`.
+
+Before enabling remote extraction, read these two fields:
 
 **`firecrawlFreshScrape`** — `false` means Firecrawl operates cache-only
 (`lockdown: true`): the Firecrawl server will not make fresh outbound requests
@@ -101,7 +134,9 @@ that group, so Firecrawl search works either way; the flag only affects the
 hosted *fetch* fallbacks (Jina, TinyFish, and friends). Set it to `false` if you
 do not want fetched URLs handed to those services.
 
-Provider keys are optional. Enable only what you have:
+Add TinyFish and Firecrawl keys to `~/.env` for the default search route. Other
+providers below are supported, but search providers outside the allowlist need
+an explicit config change:
 
 | Provider | Key | Role |
 | :--- | :--- | :--- |
@@ -152,6 +187,12 @@ With Pi installed, run from the repository root:
 node tests/test-custom-footer.mjs
 ```
 
+Verify the search template without credentials or network calls:
+
+```bash
+node tests/test-web-search-config.mjs
+```
+
 For npm or other install layouts, set `PI_NODE_MODULES` to the directory
 containing Pi's installed dependencies. Tests cover light/dark themes, context
 thresholds, narrow terminals, Unicode, live updates, commands, and subscription
@@ -195,7 +236,8 @@ pi-setup/
 ├── setup/
 │   └── install.sh
 └── tests/
-    └── test-custom-footer.mjs
+    ├── test-custom-footer.mjs
+    └── test-web-search-config.mjs
 ```
 
 ## Manual steps after install
@@ -203,7 +245,8 @@ pi-setup/
 1. Write your keys to `~/.env` and `chmod 600 ~/.env`.
 2. Restart Pi so it picks up the new settings.
 3. Authenticate the model providers you use (`/login`, or the provider's own flow).
-4. Edit `~/.pi/agent/web-search.json` — drop providers you have no key for.
+4. For an existing config, merge the TinyFish/Firecrawl route above and run
+   `/reload`. Adjust the search allowlist and route if you use other providers.
 
 ## Not in this repo
 
