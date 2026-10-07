@@ -203,11 +203,13 @@ In fullscreen mode, click the tool header after a result arrives to expand it;
 click again to collapse it. `Ctrl+O` expands/collapses all tools and also works
 in regular terminal mode. Expanded output uses one padded `Box` layout with a
 neutral tint blended at 30% over Pi's reported terminal background (ANSI has no
-actual alpha channel). Its straight border uses edge-aligned strokes so the
-interior meets the border without painting border cells; centered rounded glyphs
-cannot provide pixel-perfect clipping in a character-cell TUI. Native background
-layers are flattened into this one surface; foreground syntax/diff colors remain
-unchanged. The summary header and collapsed calls keep the terminal background.
+actual alpha channel). Edge-aligned `▕`/`▏` sides and native ANSI overline
+rules on spaces meet the filled interior without tinting the border cells.
+The heading stays unshaded and merges tool details (such as `read` line ranges)
+to avoid duplicate title rows. Headings and border cells keep the terminal
+background, so the tint stays inside the frame. Native background layers are
+flattened into this one surface; foreground syntax/diff colors remain
+unchanged. Collapsed and result-less calls keep the terminal background.
 Expanded calls reuse the original built-in or plugin renderers, including edit
 diffs and write contents. Unknown tools fall back to
 plain arguments/output. Collapsed errors are marked, and streaming calls remain
@@ -215,6 +217,31 @@ compact. This changes presentation only, not tool execution or model-visible
 results. Pi's native inline image panels are outside the renderer and can still
 appear when image display is enabled. Disable this extension through `pi config`
 and `/reload` to restore the normal preview layout.
+
+**`code-block.ts`** — gives assistant code fences and expanded `read`, `bash`,
+`write`, and `edit` output an edge-aligned frame with language, status, and copy
+action on the top stroke, with a subtle 15% interior tint and no outer tinting.
+No line numbers are added; edit diffs also omit Pi's line-number gutter while
+keeping change markers and colors. File paths are hidden in code-block headers
+by default (the tool summary still shows its arguments).
+
+- Click `[Copy]` in fullscreen mode, or use `/code-copy` to select a block from
+  the current session branch with the keyboard. Copy excludes the frame and
+  preserves source tabs. Edit copy returns a number-free diff with `+`/`-` markers.
+- Run `/codeblock-path on` or `/codeblock-path off` for the current session.
+  Start Pi with `--code-block-path` to show paths from startup.
+- Assistant headers only show a path explicitly supplied as `path=...` in the
+  fence info; they do not infer filenames from code.
+
+Tool rendering uses the public extension API through `compact-tools.ts`.
+Assistant rendering needs a guarded adapter for Pi 1.0.4's internal Markdown
+renderer because Pi has no public code-block component hook. Unknown renderer
+shapes keep native message rendering and show a warning. Nested list/blockquote
+fences, user messages, and thinking blocks retain native rendering. Mermaid
+continues through Pi's own Markdown transformer. The adapter is TUI-only and
+restores the original methods on reload/shutdown. Very narrow panels omit the
+frame/copy action; `/code-copy` remains available. Disable `code-block.ts` and
+reload to restore native code presentation.
 
 **`dollar-skill.ts`** — types `$skill-name` and rewrites it to
 `/skill:skill-name` on submit, plus `$`-triggered autocomplete over installed
@@ -265,7 +292,7 @@ and the `$<name>` alias, and only rewrites the widget when the chip actually
 changes — widget writes re-render the transcript. Use either extension or both;
 they do not conflict.
 
-All six are plain TypeScript and are loaded directly from
+All seven are plain TypeScript and are loaded directly from
 `~/.pi/agent/extensions/`. The header, footer, and initial tool-folding state
 activate automatically in TUI mode; no extra package or installer change is needed.
 
@@ -276,6 +303,7 @@ With Pi installed, run from the repository root:
 ```bash
 node tests/test-custom-footer.mjs
 node tests/test-compact-tools.mjs
+node tests/test-code-block.mjs
 node tests/test-skill-highlight.mjs
 node tests/test-skill-invoke-chip.mjs
 ```
@@ -352,6 +380,39 @@ returned `OK` after the patch; DeepSeek and Sol passed the version gate but
 reported daily quota exhaustion. That remaining quota error is not fixed by
 changing client metadata.
 
+### Browser executable
+
+The shared template leaves `pi-browser-use.executablePath` unset. The extension
+uses `CHROME_PATH` when it points to an existing file, then checks standard
+Chrome/Chromium locations for the current OS. Install Chrome separately; this
+bootstrap does not install a browser.
+
+If your live `~/.pi/agent/settings.json` still contains the old macOS Brave path,
+back up that file and remove only `pi-browser-use.executablePath`, preserving
+other browser settings. An explicit path takes precedence over discovery and
+fails if the file is missing. Keep a Brave or other custom-browser path only in
+your machine-local settings, not in the shared template. Re-running the installer
+without `--force` does not migrate existing settings; do not use `--force` just
+for this change. Restart Pi or run `/reload` after editing.
+
+### Smart-fetch dependency warning
+
+`pi-smart-fetch@0.3.17` declares `@earendil-works/pi-tui` and
+`@sinclair/typebox` as runtime dependencies, although Pi supplies these modules.
+Pi reports this as a package warning, separate from browser startup failures.
+
+Until an upstream release fixes the manifest, a temporary local workaround is
+to back up `<agent-dir>/npm/node_modules/pi-smart-fetch/package.json`, remove
+only those two entries from `dependencies`, and add them to `peerDependencies`
+with `"*"` ranges. Preserve the other dependencies and package fields. Do not
+delete shared `node_modules` or patch Pi's extension loader. This bootstrap does
+not apply the workaround automatically.
+
+Restart Pi or run `/reload`, confirm the warning is absent and `web_fetch` still
+works. The manifest change alone does not prove module-instance identity.
+Package updates/reinstalls can overwrite this local workaround; recheck the
+installed manifest afterward. Restore the backed-up manifest to roll it back.
+
 ### Diff review and LSP
 
 - `npm:pi-diff-review@0.1.27`: `/diff`, `/diff --cached`, `/diff main...HEAD`,
@@ -422,6 +483,7 @@ pi-setup/
 │   ├── settings.json
 │   └── web-search.example.json
 ├── extensions/
+│   ├── code-block.ts
 │   ├── compact-tools.ts
 │   ├── custom-banner.ts
 │   ├── custom-footer.ts
@@ -433,6 +495,7 @@ pi-setup/
 ├── setup/
 │   └── install.sh
 └── tests/
+    ├── test-code-block.mjs
     ├── test-compact-tools.mjs
     ├── test-custom-footer.mjs
     ├── test-package-selection.mjs
@@ -461,6 +524,7 @@ and `models-store.json` are machine-local state and are gitignored.
 Remove what was installed:
 
 ```bash
+rm ~/.pi/agent/extensions/code-block.ts
 rm ~/.pi/agent/extensions/compact-tools.ts
 rm ~/.pi/agent/extensions/custom-banner.ts
 rm ~/.pi/agent/extensions/custom-footer.ts
