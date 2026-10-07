@@ -1,5 +1,5 @@
 {
-  "executor": "devin/deepseek-v4-1-flash",
+  "executor": "devin/deepseek-v4.1-flash",
   "advisor": "devin/swe-2",
   "advisorPlanGate": true,
   "advisorFailureGate": true,

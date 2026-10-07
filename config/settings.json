@@ -44,7 +44,7 @@
     "npm:@latentminds/pi-quotas",
     "npm:pi-cache-optimizer",
     "npm:pi-context-view",
-    "git:github.com/ttttmr/pi-devin-oauth"
+    "npm:pi-devin-local"
   ],
   "terminal": {
     "imageWidthCells": 60
@@ -55,8 +55,8 @@
   "pi-browser-use": {
     "executablePath": "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser"
   },
-  "defaultProvider": "antigravity",
-  "defaultModel": "gemini-3.8-flash",
+  "defaultProvider": "devin",
+  "defaultModel": "deepseek-v4.1-flash",
   "defaultThinkingLevel": "high",
   "extensions": [
     "-builtin:mcp"
