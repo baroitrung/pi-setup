@@ -1,3 +1,6 @@
+import { existsSync } from "node:fs";
+import { homedir } from "node:os";
+import { dirname, join } from "node:path";
 import {
 	CustomEditor,
 	getAgentDir,
@@ -159,6 +162,21 @@ function paintLine(line: string, known: Set<string>, open: string): string {
 	return output + line.slice(last);
 }
 
+function discoverSkillPaths(cwd: string): string[] {
+	const paths: string[] = [];
+	const userAgents = join(homedir(), ".agents", "skills");
+	if (existsSync(userAgents)) paths.push(userAgents);
+	let cur = cwd;
+	while (true) {
+		const proj = join(cur, ".agents", "skills");
+		if (proj !== userAgents && existsSync(proj)) paths.push(proj);
+		const parent = dirname(cur);
+		if (parent === cur) break;
+		cur = parent;
+	}
+	return paths;
+}
+
 export default function skillHighlightEditor(pi: ExtensionAPI) {
 	let known = new Set<string>();
 	let loadedAt = 0;
@@ -203,7 +221,8 @@ export default function skillHighlightEditor(pi: ExtensionAPI) {
 
 	const refresh = (cwd: string): void => {
 		try {
-			const result = loadSkills({ cwd, agentDir: getAgentDir(), skillPaths: [], includeDefaults: true });
+			const skillPaths = discoverSkillPaths(cwd);
+			const result = loadSkills({ cwd, agentDir: getAgentDir(), skillPaths, includeDefaults: true });
 			known = new Set(result.skills.map((skill) => skill.name.toLowerCase()));
 			loadedAt = Date.now();
 		} catch {
