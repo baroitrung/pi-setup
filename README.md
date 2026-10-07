@@ -298,6 +298,60 @@ After installing, run `/reload` in Pi to check both components visually.
 `config/settings.json` lists the Pi packages this setup expects. Trim the list
 to what you actually use; Pi resolves configured packages on startup.
 
+### Devin provider
+
+- `npm:pi-devin-local`: registers Devin as a native Pi provider while the
+  local Devin CLI owns authentication and the live model catalog. Pi remains
+  the agent harness for tools, sessions, and UI.
+- Install the Devin CLI first (`curl -fsSL https://cli.devin.ai/install.sh | bash`),
+  sign in with `devin auth login`, then run `/reload` and `/login devin` inside Pi.
+- Do not install `git:github.com/ttttmr/pi-devin-oauth` at the same time: both
+  packages register the `devin` provider. The template keeps `pi-devin-local`
+  for CLI authentication and the live catalog. Version 0.3.0 still sends a
+  fixed Desktop client identity; see the compatibility fix below.
+- `defaultProvider`/`defaultModel` select `devin/deepseek-v4.1-flash`; change
+  them if this machine should start on another provider.
+- `config/advisor.json` uses `devin/deepseek-v4.1-flash` and `devin/swe-2`,
+  matching the family slugs reported by `devin models list`.
+
+#### Temporary client identity fix (pi-devin-local 0.3.0)
+
+If Pi reports “Your Windsurf version is out of date” while the native Devin CLI
+gets past that check, run:
+
+```bash
+node scripts/patch-devin-client.mjs --dry-run
+node scripts/patch-devin-client.mjs
+node scripts/patch-devin-client.mjs --check
+```
+
+The script targets `~/.pi/agent/npm/node_modules/pi-devin-local` (or
+`PI_CODING_AGENT_DIR`; `--package-dir` overrides the whole package path). It
+accepts only the exact published 0.3.0 metadata source, backs it up as
+`src/metadata.ts.pi-setup-backup`, and changes only client metadata. The fix
+uses the observed Devin CLI 3000.11.3 chat identity: `devin-cli`, version
+`3000.11.3`, and `chisel` in the extension identity fields. It does not read
+credentials or change authentication, models, tools, or quotas. The version
+is a verified default, **not** automatic CLI-version discovery;
+`DEVIN_CLIENT_VERSION` can override it with a `major.minor.patch` value.
+`--check` verifies the local patch, **not** the live server's version gate. If
+the gate changes again, compare native CLI **GetChatMessage** metadata fields
+1, 2, 7, 12 and 28; catalog/status RPCs can use different identities. Capture
+only those identity fields, never credentials, JWTs or complete request bodies.
+This is an unofficial compatibility workaround, not an upstream-supported
+integration; check your provider's terms before applying.
+
+Restart Pi or run `/reload`. Bootstrap only copies the script and prints this
+manual step; it does not patch packages automatically. Reapply after package
+updates/reinstalls if the original 0.3.0 source returns. Newer or modified
+sources are refused and need review, not a forced patch. To roll back, copy
+`src/metadata.ts.pi-setup-backup` over `src/metadata.ts`, then reload.
+
+Regression check: `node tests/test-devin-client.mjs`. On this account, SWE-2
+returned `OK` after the patch; DeepSeek and Sol passed the version gate but
+reported daily quota exhaustion. That remaining quota error is not fixed by
+changing client metadata.
+
 ### Diff review and LSP
 
 - `npm:pi-diff-review@0.1.27`: `/diff`, `/diff --cached`, `/diff main...HEAD`,
