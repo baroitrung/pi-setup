@@ -26,9 +26,12 @@ assert.deepEqual(selected.themes, ["themes/dayowl.json", "themes/modern-dark.jso
 assert.deepEqual(selected.prompts, []);
 assert(!sources.some((source) => source.startsWith("npm:mitsupi")), "npm package must not enable the whole bundle");
 assert.equal(settings.theme, "system", "adding themes must not change the selected theme");
+assert(sources.includes("npm:pi-browser-use"), "browser extension must remain enabled");
 assert(sources.includes("npm:pi-devin-local"), "Devin Local provider must be installed");
 assert.equal(settings.defaultProvider, "devin", "default provider must use the Devin plugin");
 assert.equal(settings.defaultModel, "deepseek-v4.1-flash", "default model must use the Devin CLI family slug");
 assert(!sources.some((source) => source === "git:github.com/ttttmr/pi-devin-oauth"),
 	"pi-devin-oauth registers the same devin provider and must not be combined");
-console.log("PASS: pinned diff/LSP, selected mitsupi resources, one Devin provider");
+assert(!Object.hasOwn(settings["pi-browser-use"] ?? {}, "executablePath"),
+	"shared browser config must use automatic discovery, not a machine-specific executablePath");
+console.log("PASS: pinned diff/LSP, selected mitsupi resources, browser autodetection, one Devin provider");

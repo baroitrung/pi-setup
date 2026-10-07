@@ -52,9 +52,6 @@
   "images": {
     "blockImages": true
   },
-  "pi-browser-use": {
-    "executablePath": "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser"
-  },
   "defaultProvider": "devin",
   "defaultModel": "deepseek-v4.1-flash",
   "defaultThinkingLevel": "high",
