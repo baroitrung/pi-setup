@@ -37,24 +37,85 @@ const click = (component) => component.handleMouse({ type: "click", button: "lef
 const ui = { requestRender() {} };
 const panelTint = () => mixColors(activeTheme.colors.toolPendingBg, activeTheme.colors.text, 0.06, "srgb");
 const panelBackground = () => backgroundAnsi(mixColors(terminalBackground, panelTint(), 0.3, "srgb"), activeTheme.getColorMode());
+// Measure the active background at every printed cell, not just SGR presence.
+// The old frame had the tint in its body but reset it before the right/bottom borders.
+const backgroundCells = (line) => {
+	const cells = [];
+	let background = "default", offset = 0;
+	const append = (text) => cells.push(...Array(visibleWidth(plain(text))).fill(background));
+	for (const match of line.matchAll(/\x1b\[[\d;]*m|\x1b\]8;[^\x07\x1b]*(?:\x07|\x1b\\)/g)) {
+		append(line.slice(offset, match.index));
+		if (match[0].startsWith("\x1b[")) {
+			const parameters = match[0].slice(2, -1);
+			const codes = parameters === "" ? [0] : parameters.split(";").map(Number);
+			for (let i = 0; i < codes.length; i++) {
+				const code = codes[i];
+				if (code === 38 || code === 48) {
+					const count = codes[i + 1] === 2 ? 5 : codes[i + 1] === 5 ? 3 : 1;
+					if (code === 48) background = `\x1b[${codes.slice(i, i + count).join(";")}m`;
+					i += count - 1;
+				} else if (code === 0 || code === 49) background = "default";
+				else if ((code >= 40 && code <= 47) || (code >= 100 && code <= 107)) background = `\x1b[${code}m`;
+			}
+		}
+		offset = match.index + match[0].length;
+	}
+	append(line.slice(offset));
+	return cells;
+};
+// Paired controls prove the verifier catches a gap after an ANSI reset.
+assert.deepEqual(backgroundCells("\x1b[48;2;49;51;57m│ \x1b[31mX\x1b[0m│"),
+	["\x1b[48;2;49;51;57m", "\x1b[48;2;49;51;57m", "\x1b[48;2;49;51;57m", "default"]);
+assert.deepEqual(backgroundCells("\x1b[48;2;49;51;57m│ \x1b[31mX\x1b[0m\x1b[48;2;49;51;57m│"),
+	Array(4).fill("\x1b[48;2;49;51;57m"));
+const overlineCells = (line) => {
+	const cells = [];
+	let decorated = false, offset = 0;
+	const append = (text) => cells.push(...Array(visibleWidth(plain(text))).fill(decorated));
+	for (const match of line.matchAll(/\x1b\[[\d;]*m|\x1b\]8;[^\x07\x1b]*(?:\x07|\x1b\\)/g)) {
+		append(line.slice(offset, match.index));
+		if (match[0].startsWith("\x1b[")) {
+			const parameters = match[0].slice(2, -1);
+			const codes = parameters === "" ? [0] : parameters.split(";").map(Number);
+			for (let i = 0; i < codes.length; i++) {
+				const code = codes[i];
+				if (code === 38 || code === 48 || code === 58) {
+					i += codes[i + 1] === 2 ? 4 : codes[i + 1] === 5 ? 2 : 0;
+				} else if (code === 0 || code === 55) decorated = false;
+				else if (code === 53) decorated = true;
+			}
+		}
+		offset = match.index + match[0].length;
+	}
+	append(line.slice(offset));
+	return cells;
+};
+assert.deepEqual(overlineCells("\x1b[53m  \x1b[55m "), [true, true, false]);
+assert.deepEqual(overlineCells("\x1b[38;2;53;55;0m \x1b[58;2;53;55;0m "), [false, false],
+	"RGB channels must never be interpreted as overline controls");
+assert.deepEqual(overlineCells("\x1b[59;53m \x1b[0m "), [true, false], "combined SGR and resets are tracked");
+const hasOverline = (component, width = 120) => component.render(width).some((line) => overlineCells(line).includes(true));
 const assertFrame = (component, width = 120) => {
-	const lines = nonempty(component, width);
-	assert.equal(lines[1], ` ${"▁".repeat(width - 2)} `, "top stroke touches the next row's interior");
-	assert.equal(lines.at(-1), ` ${"▔".repeat(width - 2)} `, "bottom stroke touches the previous row's interior");
-	assert(lines.slice(2, -1).every((line) => line.startsWith("▕ ") && line.endsWith(" ▏") && visibleWidth(line) === width),
-		"content has aligned side borders");
+	// Decorations on spaces are visible: do not filter rows by stripped text.trim().
+	const raw = component.render(width).slice(1);
+	const lines = raw.map(plain);
+	assert.deepEqual(overlineCells(raw[1]), [false, ...Array(width - 2).fill(true), false],
+		"top cap uses native overline on spaces, without font-dependent block or scan-line glyphs");
+	assert.equal(lines[1], "▕" + " ".repeat(width - 2) + "▏", "top padding joins correctly oriented side strokes");
+	assert.equal(lines.at(-1), " ".repeat(width), "bottom cap is decorated spaces, not thick block glyphs");
+	assert.deepEqual(overlineCells(raw.at(-1)), [false, ...Array(width - 2).fill(true), false], "bottom overline spans exactly the interior");
+	assert.deepEqual(overlineCells(raw[0]), Array(visibleWidth(lines[0])).fill(false), "heading remains undecorated");
+	assert.deepEqual(backgroundCells(raw[0]), Array(visibleWidth(lines[0])).fill("default"), "heading remains unshaded");
+	assert(lines.slice(1, -1).every((line) => line.startsWith("▕") && line.endsWith("▏") && visibleWidth(line) === width),
+		"content and top padding have aligned edge strokes");
 	const background = panelBackground();
 	assert(background !== "\x1b[49m", "dim background is explicit even for the system theme");
-	const raw = component.render(width).filter((line) => plain(line).trim());
-	assert(!raw[0].includes(background), "summary header keeps its normal background");
-	assert(!raw[1].includes(background) && !raw.at(-1).includes(background), "border caps have no panel background");
-	const left = activeTheme.fg("borderMuted", "▕"), right = activeTheme.fg("borderMuted", "▏");
-	assert(raw.slice(2, -1).every((line) => line.startsWith(left + background) && line.endsWith("\x1b[49m" + right)),
-		"one interior surface fills padding and output, but never the border cells");
-	const interiors = raw.slice(2, -1).map((line) => line.slice(left.length, -right.length));
-	assert(interiors.every((line) => [...line.matchAll(/\x1b\[(?:0|49)?m/g)].every((match) =>
-		match.index + match[0].length === line.length || line.startsWith(background, match.index + match[0].length))),
-		"native ANSI resets restore the interior surface only");
+	assert.deepEqual(backgroundCells(raw.at(-1)), Array(width).fill("default"), "bottom cap does not tint outside the frame");
+	for (const [index, line] of raw.slice(1, -1).entries()) {
+		assert.deepEqual(backgroundCells(line), ["default", ...Array(width - 2).fill(background), "default"],
+			`row ${index}: fill every interior cell, but neither border cell`);
+		assert.equal(overlineCells(line)[0], false); assert.equal(overlineCells(line).at(-1), false);
+	}
 };
 
 const modernDarkPath = join(homedir(), ".pi/agent/git/github.com/mitsuhiko/agent-stuff/themes/modern-dark.json");
@@ -88,9 +149,17 @@ for (const theme of themes) {
 		assert(click(component)?.handled, "header click must be handled by Pi");
 		assert(nonempty(component)[0].startsWith(`▾ ${name}`));
 		assert(nonempty(component).join("\n").includes(expandedText), `click reveals the native output for ${name}`);
+		assertFrame(component); // Check the screenshot's right/bottom gaps before tiny-width cases.
 		for (const width of [0, 1, 4, 5, 10, 20, 40, 80, 120]) {
 			assert(component.render(width).every((line) => visibleWidth(line) <= width), `expanded ${name} fits width ${width}`);
 			if (width >= 5) assertFrame(component, width);
+			else {
+				const rendered = component.render(width).slice(1);
+				assert.deepEqual(backgroundCells(rendered[0]), Array(visibleWidth(plain(rendered[0]))).fill("default"),
+					"tiny-width headings stay unshaded");
+				for (const line of rendered.slice(1)) assert.deepEqual(backgroundCells(line), Array(width).fill(panelBackground()),
+					"frameless tiny widths still fill every output cell");
+			}
 		}
 		component.updateResult(result, true);
 		assertFrame(component);
@@ -111,6 +180,62 @@ for (const theme of themes) {
 			assert(component.render(width).every((line) => visibleWidth(line) <= width));
 		}
 		assert.equal(JSON.stringify({ args, result }), snapshot, "renderers must not alter model-facing args/results");
+	}
+	// The native read call is a second heading, not an argument body. Merge its
+	// range into the outer heading, while keeping overrides and overflowing args.
+	const readTitles = (component) => nonempty(component).filter((line) =>
+		/^read\b/.test(line.replace(/^▕\s*/, "").replace(/^▾\s*/, "").trim()));
+	for (const [args, detail] of [
+		[{ path: "sample.ts" }, "sample.ts"],
+		[{ file_path: "alias.ts", offset: 7, limit: 4 }, "alias.ts:7-10"],
+		[{ path: "sample.ts", offset: null, limit: null }, "sample.ts"],
+		[{ path: "sample.ts", offset: 7 }, "sample.ts:7"],
+		[{ path: "ignored.ts", file_path: "actual.ts", limit: 3 }, "actual.ts:1-3"],
+	]) {
+		const read = new ToolExecutionComponent("read", "dedup", args, { showImages: false },
+			resolver("read", () => withBuiltInRenderers("read")), ui, process.cwd());
+		read.updateResult({ content: [{ type: "text", text: "UNIQUE READ PAYLOAD" }] }, false);
+		read.setExpanded(true);
+		assert.equal(readTitles(read).length, 1, "expanded built-in read has exactly one heading (positive dedup guard)");
+		assert(nonempty(read)[0].includes(detail), "the single heading preserves the native range and path alias");
+		assert(nonempty(read).join("\n").includes("UNIQUE READ PAYLOAD"));
+		for (const partial of [true, false]) {
+			read.updateResult({ content: [{ type: "text", text: "UNIQUE READ PAYLOAD" }] }, partial);
+			read.invalidate();
+			assert.equal(readTitles(read).length, 1, "streaming/redraw reuse does not restore the duplicate");
+		}
+		read.updateResult({ content: [{ type: "text", text: "READ ERROR PAYLOAD" }], isError: true }, false);
+		assert.equal(readTitles(read).length, 1, "error transitions retain one heading");
+		assert(nonempty(read).join("\n").includes("READ ERROR PAYLOAD"));
+		read.setExpanded(false);
+		assert.equal(nonempty(read).length, 1);
+	}
+	const longReadArgs = { path: "模型🙂".repeat(80) + ".ts", offset: 11, limit: 5 };
+	const longRead = new ToolExecutionComponent("read", "long-read", longReadArgs, { showImages: false },
+		resolver("read", () => withBuiltInRenderers("read")), ui, process.cwd());
+	longRead.updateResult({ content: [{ type: "text", text: "UNIQUE READ PAYLOAD" }] }, false);
+	longRead.setExpanded(true);
+	for (const width of [0, 1, 4, 5, 10, 20, 40, 80, 120]) {
+		const rows = longRead.render(width).map(plain);
+		assert(rows.every((line) => visibleWidth(line) <= width));
+		if (width >= 20) {
+			const compact = rows.slice(2).map((line) => line.replace(/^▕\s*/, "").replace(/\s*▏$/, "").trim()).join("");
+			assert(compact.includes(`${longReadArgs.path}:11-15`), "overflow metadata keeps the full path/range accessible without another read heading");
+		}
+	}
+	// A same-name override or native-call/custom-result decorator is not ours to strip.
+	const nativeRead = withBuiltInRenderers("read");
+	for (const override of [
+		{ ...nativeRead, renderCall: () => new Text("read PLUGIN ARGS", 0, 0) },
+		{ ...nativeRead, renderResult: (...args) => nativeRead.renderResult(...args) },
+	]) {
+		const decorated = new ToolExecutionComponent("read", "override", { path: "sample.ts" }, { showImages: false },
+			resolver("read", () => override), ui, process.cwd());
+		decorated.updateResult({ content: [{ type: "text", text: "UNIQUE READ PAYLOAD" }] }, false);
+		decorated.setExpanded(true);
+		assert.equal(readTitles(decorated).length, 2, "paired positive case: custom read headings remain intact");
+		decorated.invalidate();
+		assert.equal(readTitles(decorated).length, 2);
 	}
 	let calls = 0, results = 0, previousCall, previousResult, originalState;
 	const custom = {
@@ -150,6 +275,37 @@ for (const theme of themes) {
 	fallback.updateResult(result, false); click(fallback);
 	assert(nonempty(fallback).join("\n").includes("plain fallback"));
 	assertFrame(fallback);
+	// Long/wide summaries must reserve a visible top rule even when arguments are truncated.
+	const longHeader = new ToolExecutionComponent("custom", "long", { path: "模型🙂".repeat(100) },
+		{ showImages: false }, resolver("custom", () => undefined), ui, process.cwd());
+	longHeader.setExpanded(true);
+	assert.equal(nonempty(longHeader).length, 1);
+	assert(!hasOverline(longHeader), "expanded tools without a result have no orphan top border");
+	longHeader.updateResult(result, false);
+	for (const width of [0, 1, 4, 5, 10, 20, 40, 80, 120]) {
+		assert(longHeader.render(width).every((line) => visibleWidth(line) <= width));
+		if (width >= 5) assertFrame(longHeader, width);
+		else assert(!hasOverline(longHeader, width), "tiny widths drop the frame");
+	}
+	assert(longHeader.handleMouse({ type: "click", button: "left", x: 118, y: 1, width: 120,
+		height: longHeader.render(120).length, shift: false, alt: false, ctrl: false })?.handled,
+		"clicking the heading still toggles expansion");
+	assert.equal(nonempty(longHeader).length, 1);
+	assert(!hasOverline(longHeader), "collapsed headers have no border suffix");
+	longHeader.setExpanded(true);
+	assertFrame(longHeader);
+	longHeader.updateResult(result, true);
+	assertFrame(longHeader);
+	longHeader.setExpanded(false);
+	assert(!hasOverline(longHeader), "streaming collapse clears the top rule");
+	// Pi retains a tool's result once received; the next result-less call is a new component.
+	const nextPending = new ToolExecutionComponent("custom", "next-pending", {}, { showImages: false },
+		resolver("custom", () => undefined), ui, process.cwd());
+	nextPending.setExpanded(true);
+	assert.equal(nonempty(nextPending).length, 1);
+	assert(!hasOverline(nextPending), "panel state cannot leak to the next result-less tool");
+	assert(nextPending.render(120).every((line) => !line.includes(panelBackground())),
+		"result-less calls keep the terminal background even when expanded");
 	let nativeClick;
 	const interactive = new ToolExecutionComponent("interactive", "i", {}, { showImages: false }, resolver("interactive", () => ({
 		renderResult() {
@@ -180,5 +336,5 @@ for (const theme of themes) {
 	assertFrame(fallback); // The cached default-color Theme must pick up late terminal replies.
 	terminalBackground = rgbColor(40, 44, 52);
 	setTerminalColors({ background: { r: 40, g: 44, b: 52 }, foreground: { r: 229, g: 231, b: 235 } });
-	console.log(`PASS ${theme}: one-line calls, single interior Box/30% tint, unshaded edge-aligned borders, native foreground preservation, theme changes, native clicks/Ctrl+O, streaming/errors, widths, unchanged model data`);
+	console.log(`PASS ${theme}: one-line calls, interior-only background/30% tint, native overline rules below unshaded heading, native foreground preservation, theme changes, native clicks/Ctrl+O, streaming/errors, widths, unchanged model data`);
 }
