@@ -34,7 +34,6 @@
       "prompts": []
     },
     "npm:pi-memory",
-    "npm:pi-advisor-flow",
     "npm:@tmustier/pi-session-recap",
     "npm:pi-smart-fetch",
     "npm:pi-browser-use",

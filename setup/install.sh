@@ -11,7 +11,7 @@
 # What it does:
 #   1. Copies extensions/  → ~/.pi/agent/extensions/
 #   2. Copies scripts/     → ~/.pi/agent/scripts/
-#   3. Installs advisor.json + extensions/quotas.json
+#   3. Installs extensions/quotas.json
 #   4. Handles settings.json (install if new, otherwise show a diff)
 #   5. Handles web-search.json from web-search.example.json (same rule)
 #   6. Verifies and prints the remaining manual steps
@@ -105,12 +105,7 @@ for f in "$REPO_DIR/scripts/"*; do
   sync_file "$f" "$PI_DIR/scripts/$(basename "$f")" 700
 done
 
-# --- Step 4: advisor ---------------------------------------------------------
-echo ""
-echo "Config"
-sync_file "$REPO_DIR/config/advisor.json" "$PI_DIR/advisor.json"
-
-# --- Step 5: settings.json ---------------------------------------------------
+# --- Step 4: settings.json ---------------------------------------------------
 SETTINGS_SRC="$REPO_DIR/config/settings.json"
 SETTINGS_DEST="$PI_DIR/settings.json"
 if [ ! -e "$SETTINGS_DEST" ]; then
@@ -132,7 +127,7 @@ else
   yellow "     Re-run with --force to overwrite (a backup is taken)."
 fi
 
-# --- Step 6: web-search.json -------------------------------------------------
+# --- Step 5: web-search.json -------------------------------------------------
 WS_SRC="$REPO_DIR/config/web-search.example.json"
 WS_DEST="$PI_DIR/web-search.json"
 if [ ! -e "$WS_DEST" ]; then
@@ -149,7 +144,7 @@ else
   dim "    unchanged: ${WS_DEST/#$HOME/\~} (not touching your live config)"
 fi
 
-# --- Step 7: verify ----------------------------------------------------------
+# --- Step 6: verify ----------------------------------------------------------
 echo ""
 echo "Verification"
 echo "------------"
@@ -158,7 +153,6 @@ echo "  extensions/     : $count_ext TypeScript extensions"
 echo "  scripts/        : $(find "$PI_DIR/scripts" -maxdepth 1 -type f 2>/dev/null | wc -l | tr -d ' ') scripts"
 echo "  settings.json   : $([ -f "$SETTINGS_DEST" ] && echo present || echo MISSING)"
 echo "  web-search.json : $([ -f "$WS_DEST" ] && echo present || echo MISSING)"
-echo "  advisor.json    : $([ -f "$PI_DIR/advisor.json" ] && echo present || echo MISSING)"
 
 if [ "$DRY_RUN" = 1 ]; then
   echo ""
@@ -166,7 +160,7 @@ if [ "$DRY_RUN" = 1 ]; then
   exit 0
 fi
 
-# --- Step 8: version stamp ---------------------------------------------------
+# --- Step 7: version stamp ---------------------------------------------------
 if git -C "$REPO_DIR" rev-parse HEAD >/dev/null 2>&1; then
   REPO_REV="$(git -C "$REPO_DIR" rev-parse HEAD)"
   printf '%s\n' "$REPO_REV" > "$PI_DIR/.bootstrap-version"

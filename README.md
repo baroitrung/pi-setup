@@ -25,7 +25,6 @@ bash setup/install.sh --dry-run
 | `extensions/*.ts` | `~/.pi/agent/extensions/` | Gradient banner, compact statusline/tool calls, `$skill` autocomplete |
 | `config/quotas.json` | `~/.pi/agent/extensions/` | Config for the `pi-quotas` package |
 | `scripts/get-secret.sh` | `~/.pi/agent/scripts/` | Reads one key from `~/.env`; mode `700` |
-| `config/advisor.json` | `~/.pi/agent/advisor.json` | Advisor model selection |
 | `config/settings.json` | `~/.pi/agent/settings.json` | Installed only if absent — otherwise diffed |
 | `config/web-search.example.json` | `~/.pi/agent/web-search.json` | Same rule; **this is an example, edit it** |
 
@@ -472,8 +471,6 @@ to what you actually use; Pi resolves configured packages on startup.
   fixed Desktop client identity; see the compatibility fix below.
 - `defaultProvider`/`defaultModel` select `devin/deepseek-v4.1-flash`; change
   them if this machine should start on another provider.
-- `config/advisor.json` uses `devin/deepseek-v4.1-flash` and `devin/swe-2`,
-  matching the family slugs reported by `devin models list`.
 
 #### Temporary client identity fix (pi-devin-local 0.3.0)
 
@@ -611,7 +608,6 @@ version or commit.
 ```
 pi-setup/
 ├── config/
-│   ├── advisor.json
 │   ├── quotas.json
 │   ├── settings.json
 │   └── web-search.example.json
@@ -666,7 +662,6 @@ rm ~/.pi/agent/extensions/dollar-skill.ts
 rm ~/.pi/agent/extensions/skill-highlight-editor.ts
 rm ~/.pi/agent/extensions/skill-invoke-chip.ts
 rm ~/.pi/agent/scripts/get-secret.sh
-rm ~/.pi/agent/advisor.json
 ```
 
 Then restore any `*.backup.<timestamp>` file you want back.
