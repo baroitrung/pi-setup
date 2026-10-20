@@ -213,12 +213,11 @@ extension statuses; `/builtin-footer` restores them.
 ```
 
 Adjacent collapsed tool calls sit back-to-back without blank lines. User
-messages get a one-cell accent rule down their own markdown lines only, so the
-padding rows above and below stay clear. The rule is painted as a cell
-background (accent mixed 55% over the message surface), because every glyph only
-reaches the font's em box: with a tall line box, `▎` covers 15px of a 45px cell
-and box-drawing `│` about 8px, so neither can join into a continuous rule. The
-`▎` glyph remains the fallback when no theme is available. The rule is repainted from the
+messages get a one-cell accent rule (`▎`, left quarter block) on every rendered
+row — including the blank padding rows — so the rule spans the whole block
+instead of stopping at the text line. The glyph is one cell tall, which is the
+full line height; a cell-fill was rejected because a background always covers a
+whole cell and read as a heavy stripe. The rule is repainted from the
 original render on reload, so a session that loaded an older rule glyph collapses
 back to one bar instead of stacking them.
 In fullscreen mode, click the tool header after a result arrives to expand it;

@@ -124,16 +124,14 @@ const modernDarkPath = join(homedir(), ".pi/agent/git/github.com/mitsuhiko/agent
 const themes = ["dark", "light", "system", ...(existsSync(modernDarkPath) ? ["modern-dark"] : [])];
 const selectTheme = (name) => name === "modern-dark" ? setThemeInstance(loadThemeFromPath(modernDarkPath)) : setTheme(name);
 selectTheme("dark");
-// The user-message bar is one cell in the existing padding column, on body lines only.
+// The user-message bar spans the whole block: the markdown render is padding + body +
+// padding, and the rule must cover every row or it stops short of the block edges.
 {
 	const message = new UserMessageComponent("first line\n\nsecond paragraph", undefined, 1, []);
 	const lines = message.render(60).map(plain);
 	assert(lines.every((line) => visibleWidth(line) === 60), "the bar replaces padding instead of widening the message");
-	assert.equal(lines[0].trim(), "", "the padding row above the message stays clear");
-	assert.equal(lines.at(-1).trim(), "", "the padding row below the message stays clear");
-	assert.deepEqual(lines.slice(1, -1).map((line) => line.startsWith("▎")), [true, true, true],
-		"every body line, including a blank one between paragraphs, keeps the rule continuous");
-	assert.equal(lines.join("").split("▎").length - 1, 3, "exactly one rule cell per body line");
+	assert(lines.every((line) => line.startsWith("▎")), "every rendered row, padding included, carries the rule");
+	assert.equal(lines.join("").split("▎").length - 1, lines.length, "exactly one rule cell per row");
 }
 // A reload (or a stale variant that already prefixed its own bar) must not stack bars.
 {
@@ -156,20 +154,6 @@ selectTheme("dark");
 	assert.equal((again.match(/[▎▌]/g) ?? []).length, 1, "repeated loads stay single");
 	proto.render = current;
 	proto._compactUserBar = 2;
-}
-// With a live theme the rule is a cell fill: glyphs only reach the em box, and a terminal
-// with a tall line box leaves 15px of a 45px cell unpainted above and below the glyph.
-{
-	const expected = backgroundAnsi(mixColors(activeTheme.colors.userMessageBg ?? activeTheme.colors.customMessageBg,
-		rgbColor(198, 120, 221), 0.55, "srgb"), activeTheme.getColorMode());
-	handlers.get("session_start")({}, { mode: "tui", ui: { theme: activeTheme, setToolsExpanded() {} } });
-	const raw = new UserMessageComponent("fill check", undefined, 1, []).render(40);
-	const body = raw.find((line) => plain(line).trim());
-	assert(body.includes(expected), "the rule is painted as a cell fill");
-	assert(!body.includes("▎"), "no glyph fallback while the fill is available");
-	assert.equal(visibleWidth(plain(body)), 40, "the fill replaces the existing padding cell");
-	assert(raw.findIndex((line) => line === body) > 0, "the fill stays on body rows only");
-	handlers.get("session_start")({}, { mode: "tui", ui: { setToolsExpanded() {} } });
 }
 for (const theme of themes) {
 	selectTheme(theme);

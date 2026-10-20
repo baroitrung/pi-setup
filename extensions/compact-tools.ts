@@ -1,6 +1,6 @@
 import { createReadToolDefinition, getLanguageFromPath, highlightCode, Theme, ToolExecutionComponent, UserMessageComponent, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { numberlessDiff, renderWithCodeBlockPaint, toolCodeBlock, type ToolRenderContext } from "./code-block.ts";
-import { backgroundAnsi, Box, Container, mixColors, rgbColor, Text, truncateToWidth, visibleWidth, type Component } from "@earendil-works/pi-tui";
+import { backgroundAnsi, Box, Container, mixColors, Text, truncateToWidth, visibleWidth, type Component } from "@earendil-works/pi-tui";
 
 interface NativeState {
 	state: Record<string, unknown>;
@@ -220,14 +220,12 @@ function installToolSpacingHook(): void {
 	};
 }
 
-// A left quarter block fills the whole cell height; box-drawing `│` only covers the
-// middle third of it, which breaks the rule between wrapped lines.
+// A left quarter block is one cell tall and two cells-worth of ink narrower than the
+// message surface, so painting every rendered row gives a thin rule over the whole block.
 const USER_BAR = "\x1b[38;2;198;120;221m\u258e\x1b[39m";
-const BAR_ACCENT = rgbColor(198, 120, 221);
-let liveTheme: Theme | null = null;
 // Any accent bar already on the line: the OpenCode WIP drew a `▌` in the same accent, and an
 // earlier load of this file drew its own. Unpainting them all before painting keeps one rule.
-const BAR_AT_START = /^((?:\x1b\[[\d;]*m)*)\x1b\[38;2;198;120;221m[\u258c\u258e\u258d\u258f\u2590\u2502\u2503]\x1b\[39m/;
+const BAR_AT_START = /^((?:(?:\x1b\][^\x07]*\x07)|(?:\x1b\[[\d;]*m))*)\x1b\[38;2;198;120;221m[\u258c\u258e\u258d\u258f\u2590\u2502\u2503]\x1b\[39m/;
 const OSC_PREFIX = /^((?:\x1b\]\d+;[^\x07]*\x07)+)/;
 const LEADING_SPACE_AFTER_SGR = /^((?:\x1b\[[\d;]*m)*) /;
 
@@ -244,18 +242,6 @@ function unpaintBars(line: string): string {
 	return out;
 }
 
-/** Paint the rule as a cell background: glyphs only reach the em box, a cell fill never does. */
-function barCell(): string | null {
-	const theme = liveTheme;
-	if (!theme) return null;
-	try {
-		const surface = theme.colors.userMessageBg ?? theme.colors.customMessageBg;
-		return backgroundAnsi(mixColors(surface, BAR_ACCENT, 0.55, "srgb"), theme.getColorMode());
-	} catch {
-		return null;
-	}
-}
-
 function installUserMessageBarHook(): void {
 	const proto = (UserMessageComponent as any)?.prototype;
 	if (!proto?.render || proto._compactUserBar === 2) return;
@@ -266,30 +252,20 @@ function installUserMessageBarHook(): void {
 		const rendered: string[] = original.call(this, width);
 		if (rendered.length === 0) return rendered;
 		// Unpaint every bar already present so a chained hook cannot leave two rules on one line.
-		const lines = rendered.map((line) => {
-			const osc = line.match(OSC_PREFIX)?.[1] ?? "";
-			return osc + unpaintBars(line.slice(osc.length));
-		});
-		// Only the markdown body carries the rule; padding rows above and below stay clear.
-		const blank = lines.map((line) => stripEscapes(line).trim() === "");
-		let first = 0;
-		let last = lines.length - 1;
-		while (first <= last && blank[first]) first++;
-		while (last >= first && blank[last]) last--;
-		if (first > last) return lines;
-
-		return lines.map((line, index) => {
-			if (index < first || index > last) return line;
+		// The scan skips OSC/SGR prefixes, which a chained hook may have pushed the bar behind.
+		const lines = rendered.map(unpaintBars);
+		// Every rendered row carries the rule, including the blank padding rows: the markdown
+		// block is padding + body + padding, and stopping at the body leaves the rule short.
+		return lines.map((line) => {
+			if (stripEscapes(line) === "") return line;
 			const osc = line.match(OSC_PREFIX)?.[1] ?? "";
 			const rest = line.slice(osc.length);
-			const cell = barCell();
 			let replaced = false;
 			const painted = rest.replace(LEADING_SPACE_AFTER_SGR, (_m, sgr: string) => {
 				replaced = true;
-				// The fill covers the whole cell rect; the message surface resumes after it.
-				return cell ? sgr + cell + " " + "\x1b[49m" + sgr : sgr + USER_BAR;
+				return sgr + USER_BAR;
 			});
-			return osc + (replaced ? painted : cell ? cell + " " + "\x1b[49m" + rest : USER_BAR + rest);
+			return osc + (replaced ? painted : USER_BAR + rest);
 		});
 	};
 }
@@ -365,7 +341,6 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.on("session_start", (_event, ctx) => {
-		liveTheme = (ctx as any).ui?.theme ?? null;
 		if (ctx.mode === "tui") ctx.ui.setToolsExpanded(false);
 	});
 }
