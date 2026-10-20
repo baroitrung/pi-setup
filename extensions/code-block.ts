@@ -144,15 +144,16 @@ export class CodeBlock implements Component {
 	private palette() { return this.theme ?? runtime()?.palette?.(); }
 	private border(text: string) { return this.palette()?.fg("borderMuted", text) ?? getMarkdownTheme().codeBlockBorder(text); }
 	private muted(text: string) { return this.palette()?.fg("muted", text) ?? getMarkdownTheme().codeBlockBorder(text); }
-	/** Inverted chip: the muted hue fills the cell and the code surface becomes the ink. */
-	private chip(text: string): string {
+	/** Filled chip that reads as a control: the theme's selection surface with bright ink. */
+	private chip(text: string, options: { bold?: boolean } = {}): string {
 		const palette = this.palette();
 		if (!palette) return text;
 		const mode = palette.getColorMode();
-		return backgroundAnsi((palette.colors as Record<string, Color>).muted, mode)
-			+ foregroundAnsi(codeBackgroundColor(palette), mode)
-			+ text
-			+ "\x1b[49m\x1b[39m";
+		const colors = palette.colors as Record<string, Color>;
+		return backgroundAnsi(colors.selectedBg, mode)
+			+ foregroundAnsi(colors.text, mode)
+			+ (options.bold ? palette.bold(text) : text)
+			+ "\x1b[49m\x1b[22m\x1b[39m";
 	}
 	render(width: number): string[] {
 		width = Math.max(0, width);
@@ -165,7 +166,7 @@ export class CodeBlock implements Component {
 		// metadata reads as part of the top border instead of floating under it.
 		const inset = width - 2;
 		const pad = inset >= 24 ? " " : "";
-		const right = `${inset >= 30 ? `${this.chip(label(this.status))}  ` : ""}${this.chip(action)}`;
+		const right = `${inset >= 30 ? `${this.chip(label(this.status))}  ` : ""}${this.chip(action, { bold: true })}`;
 		const chrome = 2 + 4 * pad.length;
 		const heading = truncateToWidth(left, Math.max(0, inset - chrome - visibleWidth(right) - 1));
 		const rule = (columns: number) => this.border("─".repeat(Math.max(0, columns)));

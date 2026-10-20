@@ -86,7 +86,7 @@ const assertFill = (component, width = 80) => {
 	const output = raw.map(plain);
 	assert(output[0].startsWith("▕") && output[0].endsWith("▏"), "edge strokes touch the interior; no centered/rounded border cells");
 	// The status and copy labels are inverted chips: muted fill, code-surface ink.
-	const chipFill = backgroundAnsi(theme.colors.muted, theme.getColorMode());
+	const chipFill = backgroundAnsi(theme.colors.selectedBg, theme.getColorMode());
 	const cellsByChar = (line) => {
 		const chars = [...plain(line)];
 		const backgrounds = cells(line).map((cell) => cell.background);
@@ -274,7 +274,7 @@ for (const tool of ["read", "bash", "write", "edit"]) {
 	const toolCells = cells(toolHeader);
 	assert.equal(toolCells[codeStart].background, "default", "nested codeblock's left stroke remains untinted");
 	assert.equal(toolCells[codeEnd].background, "default", "nested codeblock's right stroke remains untinted");
-	const nestedChipFill = backgroundAnsi(theme.colors.muted, theme.getColorMode());
+	const nestedChipFill = backgroundAnsi(theme.colors.selectedBg, theme.getColorMode());
 	assert(toolCells.slice(codeStart + 1, codeEnd).every((cell) => cell.background === expectedBackground() || cell.background === nestedChipFill), `${tool} parent panel must not flatten the codeblock's reduced tint or its filled chips`);
 	assert(clickCopy(toolComponent)?.handled, `${tool} real nested mouse routing`);
 	await new Promise((resolve) => setImmediate(resolve));
