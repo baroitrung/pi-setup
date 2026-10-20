@@ -157,6 +157,20 @@ selectTheme("dark");
 	proto.render = current;
 	proto._compactUserBar = 2;
 }
+// With a live theme the rule is a cell fill: glyphs only reach the em box, and a terminal
+// with a tall line box leaves 15px of a 45px cell unpainted above and below the glyph.
+{
+	const expected = backgroundAnsi(mixColors(activeTheme.colors.userMessageBg ?? activeTheme.colors.customMessageBg,
+		rgbColor(198, 120, 221), 0.55, "srgb"), activeTheme.getColorMode());
+	handlers.get("session_start")({}, { mode: "tui", ui: { theme: activeTheme, setToolsExpanded() {} } });
+	const raw = new UserMessageComponent("fill check", undefined, 1, []).render(40);
+	const body = raw.find((line) => plain(line).trim());
+	assert(body.includes(expected), "the rule is painted as a cell fill");
+	assert(!body.includes("▎"), "no glyph fallback while the fill is available");
+	assert.equal(visibleWidth(plain(body)), 40, "the fill replaces the existing padding cell");
+	assert(raw.findIndex((line) => line === body) > 0, "the fill stays on body rows only");
+	handlers.get("session_start")({}, { mode: "tui", ui: { setToolsExpanded() {} } });
+}
 for (const theme of themes) {
 	selectTheme(theme);
 	const base = colorToRgb(terminalBackground), tint = colorToRgb(panelTint());
