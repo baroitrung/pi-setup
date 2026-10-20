@@ -1,4 +1,4 @@
-import { createReadToolDefinition, getLanguageFromPath, highlightCode, Theme, ToolExecutionComponent, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { createReadToolDefinition, getLanguageFromPath, highlightCode, Theme, ToolExecutionComponent, UserMessageComponent, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { numberlessDiff, renderWithCodeBlockPaint, toolCodeBlock, type ToolRenderContext } from "./code-block.ts";
 import { backgroundAnsi, Box, Container, mixColors, Text, truncateToWidth, visibleWidth, type Component } from "@earendil-works/pi-tui";
 
@@ -220,7 +220,48 @@ function installToolSpacingHook(): void {
 	};
 }
 
+// A single left-eighth block keeps the rule one cell wide, the thinnest glyph the grid offers.
+const USER_BAR = "\x1b[38;2;198;120;221m\u258f\x1b[39m";
+const OSC_PREFIX = /^((?:\x1b\]\d+;[^\x07]*\x07)+)/;
+const LEADING_SPACE_AFTER_SGR = /^((?:\x1b\[[\d;]*m)*) /;
+
+function stripEscapes(line: string): string {
+	return line.replace(/\x1b\][^\x07]*\x07/g, "").replace(/\x1b\[[\d;]*m/g, "");
+}
+
+function installUserMessageBarHook(): void {
+	if ((UserMessageComponent as any)?._compactUserBarInstalled) return;
+	const origRender = UserMessageComponent?.prototype?.render;
+	if (!origRender) return;
+	(UserMessageComponent as any)._compactUserBarInstalled = true;
+
+	UserMessageComponent.prototype.render = function (width: number): string[] {
+		const lines: string[] = origRender.call(this, width);
+		if (lines.length === 0) return lines;
+		// Only the markdown body carries the rule; padding rows above and below stay clear.
+		const blank = lines.map((line) => stripEscapes(line).trim() === "");
+		let first = 0;
+		let last = lines.length - 1;
+		while (first <= last && blank[first]) first++;
+		while (last >= first && blank[last]) last--;
+		if (first > last) return lines;
+
+		return lines.map((line, index) => {
+			if (index < first || index > last) return line;
+			const osc = line.match(OSC_PREFIX)?.[1] ?? "";
+			const rest = line.slice(osc.length);
+			let replaced = false;
+			const painted = rest.replace(LEADING_SPACE_AFTER_SGR, (_m, sgr: string) => {
+				replaced = true;
+				return sgr + USER_BAR;
+			});
+			return osc + (replaced ? painted : USER_BAR + rest);
+		});
+	};
+}
+
 export default function (pi: ExtensionAPI) {
+	installUserMessageBarHook();
 	installToolSpacingHook();
 	pi.registerToolRenderer((toolName, next) => {
 		const original = next();

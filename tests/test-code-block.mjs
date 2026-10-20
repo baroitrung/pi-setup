@@ -92,11 +92,14 @@ const assertFill = (component, width = 80) => {
 	assert.deepEqual(cells(raw.at(-1)).map((cell) => cell.overline), [false, ...Array(width - 2).fill(true), false], "bottom rule is at the top edge of unpainted cells");
 	const header = cells(raw[0]);
 	assert(!header[0].overline && !header.at(-1).overline);
+	// The top border is a glyph rule on the label baseline: no overline holes, and the
+	// metadata is fenced by rule glyphs so it reads as part of the border.
+	assert(!header.some((cell) => cell.overline), "top border is drawn with glyphs, not overline");
+	assert(output[0].startsWith("▕─ ") && output[0].endsWith("─▏"), "rule glyphs meet both edge strokes on the label baseline");
 	const titleColumn = output[0].indexOf("typescript"), actionColumn = output[0].indexOf("[Cop");
 	assert(titleColumn >= 0 && actionColumn >= 0);
-	assert(!header.slice(titleColumn, titleColumn + 10).some((cell) => cell.overline), "top rule doesn't cross the label");
-	assert(!header.slice(actionColumn, actionColumn + 6).some((cell) => cell.overline), "top rule doesn't cross Copy");
-	assert(header.slice(titleColumn + 10, actionColumn).some((cell) => cell.overline), "top stroke exists between metadata and action");
+	assert(output[0].slice(titleColumn + "typescript".length, actionColumn).includes("─"), "top stroke exists between metadata and action");
+	assert(output[0].slice(titleColumn - 2, titleColumn).endsWith("─ "), "the stroke runs into the label");
 };
 // Header must live on the top stroke, not consume a row plus a divider.
 setTheme("dark");

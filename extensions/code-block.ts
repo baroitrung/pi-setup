@@ -147,15 +147,17 @@ export class CodeBlock implements Component {
 		const inner = width - 4;
 		const action = this.feedback.pending ? "[Copying]" : this.feedback.copied ? "[Copied]" : "[Copy]";
 		const left = `${runtime()?.showPath && this.path ? `${label(this.path)}  ` : ""}${label(this.language || "text")}`;
-		// ▕ <label> <top-edge rule> <status/action> ▏ : six fixed columns.
-		const headerWidth = width - 6;
-		const right = `${headerWidth >= 26 ? `${label(this.status)}  ` : ""}${action}`;
-		const heading = truncateToWidth(left, Math.max(0, headerWidth - visibleWidth(right) - 1));
-		// Overline sits at the top edge of spaces, not halfway through a glyph cell.
-		const topRule = (columns: number) => this.border("\x1b[59;53m" + " ".repeat(columns) + "\x1b[55m");
-		const ruleWidth = Math.max(0, headerWidth - visibleWidth(heading) - visibleWidth(right));
-		const headerContent = topRule(1) + this.muted(heading) + topRule(ruleWidth + 2) + this.muted(right) + topRule(1);
-		this.copyEnd = width - 2;
+		// ▕ ─ <label> ──── <status/action> ─ ▏ : rule glyphs share the label baseline, so the
+		// metadata reads as part of the top border instead of floating under it.
+		const inset = width - 2;
+		const pad = inset >= 24 ? " " : "";
+		const right = `${inset >= 30 ? `${label(this.status)}  ` : ""}${action}`;
+		const chrome = 2 + 4 * pad.length;
+		const heading = truncateToWidth(left, Math.max(0, inset - chrome - visibleWidth(right) - 1));
+		const rule = (columns: number) => this.border("─".repeat(Math.max(0, columns)));
+		const ruleWidth = Math.max(0, inset - chrome - visibleWidth(heading) - visibleWidth(right));
+		const headerContent = rule(1) + pad + this.muted(heading) + pad + rule(ruleWidth) + pad + this.muted(right) + pad + rule(1);
+		this.copyEnd = width - 2 - pad.length;
 		this.copyStart = this.copyEnd - action.length;
 		const palette = this.palette();
 		const background = palette ? codeBackground(palette) : "";
@@ -163,7 +165,8 @@ export class CodeBlock implements Component {
 		const row = (line: string) => frame(" " + line + background + " ".repeat(Math.max(0, inner - visibleWidth(line)) + 1));
 		const lines = this.body.render(inner).flatMap((line) => wrapTextWithAnsi(line, inner));
 		// The bottom cap is an unpainted row: the fill above meets its top-edge stroke.
-		const result = [frame(headerContent), ...lines.map(row), " " + topRule(width - 2) + " "];
+		const bottomRule = (columns: number) => this.border("\x1b[59;53m" + " ".repeat(Math.max(0, columns)) + "\x1b[55m");
+		const result = [frame(headerContent), ...lines.map(row), " " + bottomRule(width - 2) + " "];
 		for (const line of result) runtime()?.paintScope?.set(line.trim(), line);
 		return result;
 	}

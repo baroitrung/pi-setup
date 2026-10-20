@@ -23,6 +23,7 @@ let terminalBackground = rgbColor(40, 44, 52); // Reporter screenshot: #282c34.
 setTerminalColors({ background: { r: 40, g: 44, b: 52 }, foreground: { r: 229, g: 231, b: 235 } });
 const { withBuiltInRenderers } = await load(join(agent, "dist/core/tools/renderers/index.js"));
 const { AssistantMessageComponent } = await load(join(agent, "dist/modes/interactive/components/assistant-message.js"));
+const { UserMessageComponent } = await load(join(agent, "dist/modes/interactive/components/user-message.js"));
 const { ToolExecutionComponent } = await load(join(agent, "dist/modes/interactive/components/tool-execution.js"));
 const handlers = new Map();
 let resolver;
@@ -122,6 +123,18 @@ const assertFrame = (component, width = 120) => {
 const modernDarkPath = join(homedir(), ".pi/agent/git/github.com/mitsuhiko/agent-stuff/themes/modern-dark.json");
 const themes = ["dark", "light", "system", ...(existsSync(modernDarkPath) ? ["modern-dark"] : [])];
 const selectTheme = (name) => name === "modern-dark" ? setThemeInstance(loadThemeFromPath(modernDarkPath)) : setTheme(name);
+selectTheme("dark");
+// The user-message bar is one cell in the existing padding column, on body lines only.
+{
+	const message = new UserMessageComponent("first line\n\nsecond paragraph", undefined, 1, []);
+	const lines = message.render(60).map(plain);
+	assert(lines.every((line) => visibleWidth(line) === 60), "the bar replaces padding instead of widening the message");
+	assert.equal(lines[0].trim(), "", "the padding row above the message stays clear");
+	assert.equal(lines.at(-1).trim(), "", "the padding row below the message stays clear");
+	assert.deepEqual(lines.slice(1, -1).map((line) => line.startsWith("▏")), [true, true, true],
+		"every body line, including a blank one between paragraphs, keeps the rule continuous");
+	assert.equal(lines.join("").split("▏").length - 1, 3, "exactly one rule cell per body line");
+}
 for (const theme of themes) {
 	selectTheme(theme);
 	const base = colorToRgb(terminalBackground), tint = colorToRgb(panelTint());

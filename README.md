@@ -212,8 +212,10 @@ extension statuses; `/builtin-footer` restores them.
 ▸ bash npm test
 ```
 
-Adjacent collapsed tool calls sit back-to-back without blank lines. In fullscreen
-mode, click the tool header after a result arrives to expand it;
+Adjacent collapsed tool calls sit back-to-back without blank lines. User
+messages get a single-cell accent rule (`▏`, one-eighth block) down their own
+markdown lines only, so the padding rows above and below stay clear.
+In fullscreen mode, click the tool header after a result arrives to expand it;
 click again to collapse it. `Ctrl+O` expands/collapses all tools and also works
 in regular terminal mode. Expanded output uses one padded `Box` layout with a
 neutral tint blended at 30% over Pi's reported terminal background (ANSI has no
@@ -235,7 +237,15 @@ and `/reload` to restore the normal preview layout.
 **`code-block.ts`** — gives assistant code fences and expanded `read`, `bash`,
 `write`, and `edit` output an edge-aligned frame with language, status, and copy
 action on the top stroke, with a subtle 15% interior tint and no outer tinting.
-No line numbers are added; edit diffs also omit Pi's line-number gutter while
+The top stroke is drawn with `─` rule glyphs on the frame's first row, so the
+language, status, and copy labels share its baseline:
+
+```text
+▕─ typescript ────────────────────────────── ✓ Complete  [Copy] ─▏
+```
+
+The bottom cap stays an ANSI overline row so it lands exactly on the seam under
+the last body row. No line numbers are added; edit diffs also omit Pi's line-number gutter while
 keeping change markers and colors. File paths are hidden in code-block headers
 by default (the tool summary still shows its arguments).
 
