@@ -43,11 +43,25 @@ import { backgroundAnsi, CURSOR_MARKER, foregroundAnsi, visibleWidth, type Edito
  * token is shown in the meantime.
  */
 
-/** CSI SGR sequence, or the zero-width hardware-cursor marker. */
-const ESCAPE = /^(?:\x1b\[[0-9;]*m|\x1b_pi:c\x07)/;
+/**
+ * CSI SGR sequence, or one of Pi's zero-width private markers. Pi 1.3 emits a family
+ * (`\x1b_pi:c`, `\x1b_pi:fc`, `\x1b_pi:/fc`) around the cursor, so match the whole family:
+ * an unknown member would be counted as text and split a token the cursor sits inside.
+ */
+const ESCAPE = /^(?:\x1b\[[0-9;]*m|\x1b_[^\x07]*\x07)/;
 
-/** The editor's fake cursor: the one place it sets inverse video. */
+/** The editor's fake cursor: the one place it sets inverse video (Pi <= 1.0). */
 const CURSOR = "\x1b[7m";
+
+/**
+ * Pi 1.3 wraps the fake-cursor cell in private markers instead of inverse video, so the
+ * caret has to be recognised in both spellings when the real cursor takes over.
+ */
+const FAKE_CURSOR_REGION = /\x1b_pi:fc\x07([\s\S]*?)\x1b_pi:\/fc\x07/g;
+
+function hideFakeCursor(line: string): string {
+	return line.replace(FAKE_CURSOR_REGION, "$1").replace(`${CURSOR_MARKER}${CURSOR}`, CURSOR_MARKER);
+}
 
 /** DECSCUSR: steady vertical beam; reset to the terminal default on release. */
 const BEAM_CURSOR = "\x1b[6 q";
@@ -271,12 +285,10 @@ export default function skillHighlightEditor(pi: ExtensionAPI) {
 				try {
 					if (open) decorated = paintLine(line, known, open);
 				} catch { /* Keep the stock render on a highlighting failure. */ }
-				// Only remove the fake inverse cursor immediately following Pi's
-				// focused-editor marker. Keep its grapheme/reset, width and marker;
-				// the TUI positions/shows the real cursor and owns overlay focus.
-				return nativeCursor
-					? decorated.replace(`${CURSOR_MARKER}${CURSOR}`, CURSOR_MARKER)
-					: decorated;
+				// Drop the fake cursor cell while the hardware cursor is active. Keep its
+				// grapheme, width and markers; the TUI positions the real cursor and owns
+				// overlay focus.
+				return nativeCursor ? hideFakeCursor(decorated) : decorated;
 			});
 		}
 	}

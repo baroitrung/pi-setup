@@ -28,7 +28,40 @@ const { KeybindingsManager } = await load(join(agent, "dist/core/keybindings.js"
 
 // `BG` is a *prefix* used to count painted ranges; `CHIP_OPEN` is the full
 // opening sequence the extension writes, derived from the live theme.
+/** Number of contiguous painted stretches, so a style re-open does not inflate the count. */
+const paintedRuns = (line) => {
+	let runs = 0, painted = false;
+	for (const cell of paintedCells(line)) {
+		if (cell.bg && !painted) runs += 1;
+		painted = cell.bg;
+	}
+	return runs;
+};
+
+/** Per-character background state, ignoring Pi's zero-width private markers. */
+const paintedCells = (line) => {
+	let bg = false;
+	const cells = [];
+	for (const match of line.matchAll(/\x1b\[([0-9;]*)m|\x1b_[^\x07]*\x07|[\s\S]/g)) {
+		if (match[1] !== undefined) {
+			const codes = match[1] === "" ? [0] : match[1].split(";").map(Number);
+			for (let i = 0; i < codes.length; i += 1) {
+				const code = codes[i];
+				if (code === 48) {
+					bg = true;
+					i += codes[i + 1] === 2 ? 4 : codes[i + 1] === 5 ? 2 : 0;
+				} else if (code === 0 || code === 49) bg = false;
+			}
+			continue;
+		}
+		if (match[0].startsWith("\x1b_")) continue;
+		cells.push({ char: match[0], bg });
+	}
+	return cells;
+};
 const BG = "\x1b[48;2;";
+/** Pi 1.3 wraps the fake-cursor cell in private markers; older Pi used inverse video. */
+const FAKE_CURSOR = /\x1b_pi:fc\x07|\x1b\[7m/;
 const CHIP_OPEN = () => backgroundAnsi(activeTheme.colors.syntaxVariable, activeTheme.getColorMode())
 	+ foregroundAnsi(activeTheme.colors.customMessageBg, activeTheme.getColorMode()) + "\x1b[1m";
 const GLYPH = "💡";
@@ -175,7 +208,7 @@ const chipRow = (lines) => lines.find((line) => line.includes(GLYPH)) ?? "";
 	const lines = editor.render(100);
 	const raw = lines.join("");
 	assert(raw.includes(CURSOR_MARKER), "hardware cursor marker is present");
-	assert(!raw.includes("\x1b[7m"), "the fake block cursor is removed");
+	assert(!FAKE_CURSOR.test(raw), "the fake cursor is removed");
 	assert(!raw.includes(GLYPH), "the token is not collapsed while the cursor is inside it");
 	assert(raw.includes(BG), "the token is highlighted instead");
 	const row = lines.find((line) => line.includes(CURSOR_MARKER));
@@ -190,11 +223,14 @@ const chipRow = (lines) => lines.find((line) => line.includes(GLYPH)) ?? "";
 	for (let i = 0; i < 4; i++) editor.handleInput("\x1b[D");
 	const row = editor.render(100).find((line) => line.includes(CURSOR_MARKER));
 	assert(row.includes(CURSOR_MARKER), "the native cursor is positioned");
-	assert(!row.includes("\x1b[7m"), "no fake block remains");
-	// After the cursor's reset the background must be re-opened, so the tail of
-	// the token is still painted.
-	const afterCursor = row.slice(row.indexOf(CURSOR_MARKER));
-	assert(afterCursor.includes(BG), "the background is re-opened after the cursor's reset");
+	assert(!FAKE_CURSOR.test(row), "no fake cursor remains");
+	// Every character of the partly-typed token keeps the chip background, however Pi
+	// spells its cursor markers: they are zero-width and must not end the fill.
+	const painted = paintedCells(row);
+	const plainRow = painted.map((cell) => cell.char).join("");
+	const tail = plainRow.lastIndexOf("git");
+	assert(tail > 0, "the token tail is still literal");
+	assert(painted.slice(tail, tail + 3).every((cell) => cell.bg), "the background survives the cursor markers");
 }
 
 // ---------------------------------------------------------------------------
@@ -208,7 +244,7 @@ const chipRow = (lines) => lines.find((line) => line.includes(GLYPH)) ?? "";
 	assert(row.includes(GLYPH), "the chip appears once the cursor clears the token");
 	assert(editor.state.cursorCol === 10, "the cursor is at the end of the token");
 	assert(row.includes(CURSOR_MARKER), "the hardware cursor remains after the chip");
-	assert(!row.includes("\x1b[7m"), "there is no second block cursor");
+	assert(!FAKE_CURSOR.test(row), "there is no second cursor");
 }
 
 // ---------------------------------------------------------------------------
@@ -234,7 +270,12 @@ const chipRow = (lines) => lines.find((line) => line.includes(GLYPH)) ?? "";
 	const raw = lines.join("");
 	assert(raw.includes(`${GLYPH} git`), "the finished chip collapses");
 	assert(plain(lines).join("\n").includes("/skill:read"), "the token under the cursor stays literal");
-	assert.equal(raw.split(BG).length - 1, 3, "chip and cursor-split token are all painted");
+	assert.equal(paintedRuns(raw), 2, "chip and cursor-split token are each painted once");
+	const cells = paintedCells(raw);
+	const plainRow = cells.map((cell) => cell.char).join("");
+	const tokenStart = plainRow.indexOf("/skill:read");
+	assert(tokenStart > 0 && cells.slice(tokenStart, tokenStart + "/skill:read".length).every((cell) => cell.bg),
+		"the literal token under the cursor stays painted");
 }
 
 // ---------------------------------------------------------------------------
@@ -338,7 +379,7 @@ const chipRow = (lines) => lines.find((line) => line.includes(GLYPH)) ?? "";
 					return [row, visibleWidth(lines[row].slice(0, lines[row].indexOf(CURSOR_MARKER)))];
 				};
 				assert.deepEqual(cursor(actual), cursor(expected), `${text} @ ${width}: cursor cell matches stock`);
-				assert(!actual.join("").includes("\x1b[7m"), "only the native caret remains");
+				assert(!FAKE_CURSOR.test(actual.join("")), "only the native caret remains");
 				assert.deepEqual(actual.map(visibleWidth), expected.map(visibleWidth), "row geometry matches");
 				editor.handleInput("\x1b[D");
 				baseline.handleInput("\x1b[D");
@@ -350,7 +391,7 @@ const chipRow = (lines) => lines.find((line) => line.includes(GLYPH)) ?? "";
 	for (let i = 0; i < 10; i++) editor.handleInput("\x1b[D");
 	assert(!editor.render(100).join("").includes(GLYPH), "cursor at token start keeps it literal");
 	hardwareVisible = false;
-	assert(!editor.render(100).join("").includes("\x1b[7m"), "focused editor renews native mode after settings reset");
+	assert(!FAKE_CURSOR.test(editor.render(100).join("")), "focused editor renews native mode after settings reset");
 	assert.equal(hardwareVisible, true, "runtime settings cannot disable the active beam");
 	const writes = cursorWrites.length;
 	editor.render(100);
@@ -400,7 +441,7 @@ for (const [label, Tui] of [["regular", TuiMainScreen], ["fullscreen", TuiAltScr
 		return [...event.matchAll(/\x1b\[\?25([hl])/g)].map((match) => match[1] === "h" ? "show" : "hide");
 	}).at(-1);
 	assert.equal(visibility(), "show", `${label}: the real TUI shows the cursor`);
-	assert(!events.join("").includes("\x1b[7m"), `${label}: no fake block written`);
+	assert(!FAKE_CURSOR.test(events.join("")), `${label}: no fake cursor written`);
 	// Pi reapplies persisted settings *after* session_start on /reload.
 	// showHardwareCursor defaults to false, so this used to undo enableBeam.
 	tui.setShowHardwareCursor(false);
@@ -408,7 +449,7 @@ for (const [label, Tui] of [["regular", TuiMainScreen], ["fullscreen", TuiAltScr
 	tui.renderNow(true);
 	assert.equal(tui.getShowHardwareCursor(), true, `${label}: beam survives runtime settings reset`);
 	assert.equal(visibility(), "show", `${label}: native caret remains visible after reload settings`);
-	assert(!events.join("").includes("\x1b[7m"), `${label}: settings reset cannot restore the fake block`);
+	assert(!FAKE_CURSOR.test(events.join("")), `${label}: settings reset cannot restore the fake cursor`);
 	tui.setFocus(null);
 	tui.setShowHardwareCursor(false);
 	tui.renderNow(true);
@@ -439,7 +480,7 @@ for (const [label, Tui] of [["regular", TuiMainScreen], ["fullscreen", TuiAltScr
 	const editor = brokenTheme.create(fakeTui, getEditorTheme(), keybindings);
 	editor.focused = true;
 	editor.setText("hello");
-	assert(!editor.render(40).join("").includes("\x1b[7m"), "theme failure still uses native caret");
+	assert(!FAKE_CURSOR.test(editor.render(40).join("")), "theme failure still uses native caret");
 	brokenTheme.hooks.get("session_shutdown")({});
 
 	hardwareVisible = true;
@@ -458,7 +499,7 @@ for (const [label, Tui] of [["regular", TuiMainScreen], ["fullscreen", TuiAltScr
 		const editor = session.create(tui, getEditorTheme(), keybindings);
 		editor.focused = true;
 		editor.setText("hello");
-		assert(editor.render(40).join("").includes("\x1b[7m"), "unsupported runtime keeps block fallback");
+		assert(FAKE_CURSOR.test(editor.render(40).join("")), "unsupported runtime keeps the fake cursor");
 		assert.doesNotThrow(() => session.hooks.get("session_shutdown")({}), "cleanup is best effort");
 	}
 }
