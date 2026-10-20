@@ -220,8 +220,11 @@ function installToolSpacingHook(): void {
 	};
 }
 
-// A left quarter block keeps the rule one cell wide while staying visible at any font size.
-const USER_BAR = "\x1b[38;2;198;120;221m\u258e\x1b[39m";
+// A hairline rule stays crisp at any font size and cannot look like a chunky block.
+const USER_BAR = "\x1b[38;2;198;120;221m\u2502\x1b[39m";
+// Any accent bar already on the line: the OpenCode WIP drew a `▌` in the same accent, and an
+// earlier load of this file drew its own. Unpainting them all before painting keeps one rule.
+const BAR_AT_START = /^((?:\x1b\[[\d;]*m)*)\x1b\[38;2;198;120;221m[\u258c\u258e\u258d\u258f\u2590\u2502\u2503]\x1b\[39m/;
 const OSC_PREFIX = /^((?:\x1b\]\d+;[^\x07]*\x07)+)/;
 const LEADING_SPACE_AFTER_SGR = /^((?:\x1b\[[\d;]*m)*) /;
 
@@ -229,15 +232,29 @@ function stripEscapes(line: string): string {
 	return line.replace(/\x1b\][^\x07]*\x07/g, "").replace(/\x1b\[[\d;]*m/g, "");
 }
 
-function installUserMessageBarHook(): void {
-	if ((UserMessageComponent as any)?._compactUserBarInstalled) return;
-	const origRender = UserMessageComponent?.prototype?.render;
-	if (!origRender) return;
-	(UserMessageComponent as any)._compactUserBarInstalled = true;
+/** Drop every accent bar a previous hook prefixed, including ones hidden behind SGR codes. */
+function unpaintBars(line: string): string {
+	let out = line;
+	for (let match = out.match(BAR_AT_START); match; match = out.match(BAR_AT_START)) {
+		out = match[1] + out.slice(match[0].length);
+	}
+	return out;
+}
 
-	UserMessageComponent.prototype.render = function (width: number): string[] {
-		const lines: string[] = origRender.call(this, width);
-		if (lines.length === 0) return lines;
+function installUserMessageBarHook(): void {
+	const proto = (UserMessageComponent as any)?.prototype;
+	if (!proto?.render || proto._compactUserBar === 2) return;
+	const original: (width: number) => string[] = proto.render;
+	proto._compactUserBar = 2;
+
+	proto.render = function (width: number): string[] {
+		const rendered: string[] = original.call(this, width);
+		if (rendered.length === 0) return rendered;
+		// Unpaint every bar already present so a chained hook cannot leave two rules on one line.
+		const lines = rendered.map((line) => {
+			const osc = line.match(OSC_PREFIX)?.[1] ?? "";
+			return osc + unpaintBars(line.slice(osc.length));
+		});
 		// Only the markdown body carries the rule; padding rows above and below stay clear.
 		const blank = lines.map((line) => stripEscapes(line).trim() === "");
 		let first = 0;

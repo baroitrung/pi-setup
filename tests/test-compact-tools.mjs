@@ -131,9 +131,31 @@ selectTheme("dark");
 	assert(lines.every((line) => visibleWidth(line) === 60), "the bar replaces padding instead of widening the message");
 	assert.equal(lines[0].trim(), "", "the padding row above the message stays clear");
 	assert.equal(lines.at(-1).trim(), "", "the padding row below the message stays clear");
-	assert.deepEqual(lines.slice(1, -1).map((line) => line.startsWith("▎")), [true, true, true],
+	assert.deepEqual(lines.slice(1, -1).map((line) => line.startsWith("│")), [true, true, true],
 		"every body line, including a blank one between paragraphs, keeps the rule continuous");
-	assert.equal(lines.join("").split("▎").length - 1, 3, "exactly one rule cell per body line");
+	assert.equal(lines.join("").split("│").length - 1, 3, "exactly one rule cell per body line");
+}
+// A reload (or a stale variant that already prefixed its own bar) must not stack bars.
+{
+	const proto = UserMessageComponent.prototype;
+	const current = proto.render;
+	proto.render = function (width) {
+		return current.call(this, width).map((line) => "\u001b[38;2;198;120;221m▌\u001b[39m" + line);
+	};
+	proto._compactUserBar = 1; // the OpenCode WIP flagged a different marker
+	extension({ registerToolRenderer: () => () => ({}), on() {} });
+	const row = new UserMessageComponent("stacked", undefined, 1, []).render(40).map(plain).find((line) => line.trim());
+	assert(row.startsWith("│"), "the current glyph wins over a stale bar");
+	assert(!row.includes("▌"), "the stale glyph is gone");
+	assert.equal((row.match(/[│▌]/g) ?? []).length, 1, "a stale bar is replaced, not stacked");
+	// A second load of this same file stays single too.
+	extension({ registerToolRenderer: () => () => ({}), on() {} });
+	proto._compactUserBar = 1;
+	extension({ registerToolRenderer: () => () => ({}), on() {} });
+	const again = new UserMessageComponent("stacked", undefined, 1, []).render(40).map(plain).find((line) => line.trim());
+	assert.equal((again.match(/[│▌]/g) ?? []).length, 1, "repeated loads stay single");
+	proto.render = current;
+	proto._compactUserBar = 2;
 }
 for (const theme of themes) {
 	selectTheme(theme);
