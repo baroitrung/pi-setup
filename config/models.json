@@ -1,0 +1,21 @@
+{
+  "$schema": "https://pi.dev/schemas/models.schema.json",
+  "providers": {
+    "opencode-go": {
+      "modelOverrides": {
+        "deepseek-v4.1-flash": {
+          "compat": {
+            "sendSessionAffinityHeaders": true,
+            "sessionAffinityFormat": "openai-nosession"
+          }
+        },
+        "deepseek-v4-pro": {
+          "compat": {
+            "sendSessionAffinityHeaders": true,
+            "sessionAffinityFormat": "openai-nosession"
+          }
+        }
+      }
+    }
+  }
+}

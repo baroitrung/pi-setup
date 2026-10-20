@@ -26,27 +26,31 @@ bash setup/install.sh --dry-run
 | `config/quotas.json` | `~/.pi/agent/extensions/` | Config for the `pi-quotas` package |
 | `scripts/get-secret.sh` | `~/.pi/agent/scripts/` | Reads one key from `~/.env`; mode `700` |
 | `config/settings.json` | `~/.pi/agent/settings.json` | Installed only if absent — otherwise diffed |
+| `config/models.json` | `~/.pi/agent/models.json` | Provider/model compat overrides; credentials stay in `auth.json` |
 | `config/web-search.example.json` | `~/.pi/agent/web-search.json` | Same rule; **this is an example, edit it** |
 
 `install.sh` is idempotent. It copies a file only when the contents differ, and
 backs up anything it overwrites to `<file>.backup.<timestamp>`.
 
-Your live `settings.json` and `web-search.json` are **never clobbered** on a
-re-run — the script prints a unified diff and leaves the decision to you. Pass
-`--force` to overwrite anyway (a backup is still taken).
+Your live `settings.json`, `models.json`, and `web-search.json` are **never
+clobbered** on a re-run — the script prints a unified diff and leaves the decision
+to you. Pass `--force` to overwrite anyway (a backup is still taken).
 
 ## Machine → repo sync
 
-The shared config was synced from the current machine on 2026-10-13 (Pi 1.2.0).
-`config/settings.json` matches the live configuration. Plugins and packages uninstalled
-on the machine have been removed from the repository (`pi-devin-local`, `agent-stuff`,
-`pi-advisor-flow`, `pi-smart-fetch`, `pi-permission-system`, `pi-extension`), along with
-uninstalled extension scripts/configs (`decision-compact.ts`, Devin client patch,
-`advisor.json`). Newly installed packages on the machine (`@narumitw/pi-goal`,
-`pi-subagents@0.77.0`) are synced into the template. The default model is
-`openai-codex/gpt-6.1-sol` with high thinking.
+The shared config was last synced from the current machine on 2026-10-20 (Pi 1.3.0).
+`config/settings.json` and `config/models.json` match the live configuration. Plugins and
+packages uninstalled on the machine have been removed from the repository
+(`pi-devin-local`, `agent-stuff`, `pi-advisor-flow`, `pi-smart-fetch`,
+`pi-permission-system`, `pi-extension`, `pi-xai-oauth`), along with uninstalled extension
+scripts/configs (`decision-compact.ts`, Devin client patch, `advisor.json`). Newly
+installed packages on the machine (`@narumitw/pi-goal`, `pi-subagents@0.77.0`) are synced
+into the template. The default model is `opencode-go/deepseek-v4.1-flash` with high
+thinking; `config/models.json` adds the session-affinity compat overrides that keep that
+proxy channel on one backend (credentials stay in `auth.json`).
 
 Orca-generated `orca-*` extensions stay machine-local and are managed by Orca.
+`herdr-agent-state.ts` is the same deal: herdr installs it and overwrites it on update.
 Do not copy credentials, sessions, caches, trust decisions, browser profiles,
 or installed package directories into this repo.
 
@@ -445,6 +449,7 @@ delegation needs a separate end-to-end check; configuration sync does not prove 
 ```
 pi-setup/
 ├── config/
+│   ├── models.json
 │   ├── quotas.json
 │   ├── settings.json
 │   └── web-search.example.json

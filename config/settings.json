@@ -1,5 +1,5 @@
 {
-  "lastChangelogVersion": "1.2.0",
+  "lastChangelogVersion": "1.3.0",
   "theme": "system",
   "tuiMode": "fullscreen",
   "hideThinkingBlock": true,
@@ -31,8 +31,8 @@
   "images": {
     "blockImages": true
   },
-  "defaultProvider": "openai-codex",
-  "defaultModel": "gpt-6.1-sol",
+  "defaultProvider": "opencode-go",
+  "defaultModel": "deepseek-v4.1-flash",
   "defaultThinkingLevel": "high",
   "extensions": [
     "-builtin:mcp"

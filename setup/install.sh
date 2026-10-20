@@ -5,7 +5,7 @@
 #
 # Usage:
 #   bash setup/install.sh            # install, never clobber existing config
-#   bash setup/install.sh --force    # overwrite settings.json / web-search.json too
+#   bash setup/install.sh --force    # overwrite settings.json / models.json / web-search.json too
 #   bash setup/install.sh --dry-run  # print what would happen, change nothing
 #
 # What it does:
@@ -13,8 +13,9 @@
 #   2. Copies scripts/     → ~/.pi/agent/scripts/
 #   3. Installs extensions/quotas.json
 #   4. Handles settings.json (install if new, otherwise show a diff)
-#   5. Handles web-search.json from web-search.example.json (same rule)
-#   6. Verifies and prints the remaining manual steps
+#   5. Handles models.json (provider/model compat overrides; same rule)
+#   6. Handles web-search.json from web-search.example.json (same rule)
+#   7. Verifies and prints the remaining manual steps
 
 set -euo pipefail
 shopt -s nullglob
@@ -127,7 +128,30 @@ else
   yellow "     Re-run with --force to overwrite (a backup is taken)."
 fi
 
-# --- Step 5: web-search.json -------------------------------------------------
+# --- Step 5: models.json -----------------------------------------------------
+# Provider/model compat overrides only: credentials stay in auth.json, so this file
+# is safe to share. Never overwritten silently.
+MODELS_SRC="$REPO_DIR/config/models.json"
+MODELS_DEST="$PI_DIR/models.json"
+if [ ! -e "$MODELS_DEST" ]; then
+  sync_file "$MODELS_SRC" "$MODELS_DEST"
+elif [ "$FORCE" = 1 ]; then
+  yellow "  models.json: --force, overwriting"
+  sync_file "$MODELS_SRC" "$MODELS_DEST"
+elif cmp -s "$MODELS_SRC" "$MODELS_DEST"; then
+  dim "    unchanged: ${MODELS_DEST/#$HOME/\~}"
+else
+  yellow ""
+  yellow "  ⚠  models.json already exists — not overwriting."
+  yellow "     Review the compat overrides and merge what you want:"
+  yellow ""
+  diff -u "$MODELS_DEST" "$MODELS_SRC" | sed 's/^/     /' || true
+  yellow ""
+  yellow "     Template: config/models.json"
+  yellow "     Re-run with --force to overwrite (a backup is taken)."
+fi
+
+# --- Step 6: web-search.json -------------------------------------------------
 WS_SRC="$REPO_DIR/config/web-search.example.json"
 WS_DEST="$PI_DIR/web-search.json"
 if [ ! -e "$WS_DEST" ]; then
@@ -152,6 +176,7 @@ count_ext=$(find "$PI_DIR/extensions" -maxdepth 1 -name "*.ts" 2>/dev/null | wc 
 echo "  extensions/     : $count_ext TypeScript extensions"
 echo "  scripts/        : $(find "$PI_DIR/scripts" -maxdepth 1 -type f 2>/dev/null | wc -l | tr -d ' ') scripts"
 echo "  settings.json   : $([ -f "$SETTINGS_DEST" ] && echo present || echo MISSING)"
+echo "  models.json     : $([ -f "$MODELS_DEST" ] && echo present || echo MISSING)"
 echo "  web-search.json : $([ -f "$WS_DEST" ] && echo present || echo MISSING)"
 
 if [ "$DRY_RUN" = 1 ]; then
@@ -160,7 +185,7 @@ if [ "$DRY_RUN" = 1 ]; then
   exit 0
 fi
 
-# --- Step 7: version stamp ---------------------------------------------------
+# --- Step 8: version stamp ---------------------------------------------------
 if git -C "$REPO_DIR" rev-parse HEAD >/dev/null 2>&1; then
   REPO_REV="$(git -C "$REPO_DIR" rev-parse HEAD)"
   printf '%s\n' "$REPO_REV" > "$PI_DIR/.bootstrap-version"
