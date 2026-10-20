@@ -9,7 +9,7 @@ import {
 	type KeybindingsManager,
 	type Theme,
 } from "@earendil-works/pi-coding-agent";
-import { CURSOR_MARKER, visibleWidth, type EditorTheme, type TUI } from "@earendil-works/pi-tui";
+import { backgroundAnsi, CURSOR_MARKER, foregroundAnsi, visibleWidth, type EditorTheme, type TUI } from "@earendil-works/pi-tui";
 
 /**
  * Inline skill chips in the prompt editor.
@@ -291,12 +291,13 @@ export default function skillHighlightEditor(pi: ExtensionAPI) {
 		const theme = ctx.ui.theme as Theme;
 		const style = (): string | undefined => {
 			try {
-				// The chip is a filled block: the surface Pi already gives the
-				// `[skill]` block in the transcript, with the glyph and name in the
-				// teal it uses for variables, bolded.
-				const background = theme.getBgAnsi("customMessageBg");
-				const foreground = theme.getFgAnsi("syntaxVariable");
-				const value = `${background}${foreground}\x1b[1m`;
+				// Filled block with inverted colors: the teal that Pi uses for variables
+				// fills the chip, and the surface Pi gives the transcript `[skill]` block
+				// becomes the ink.
+				const mode = theme.getColorMode();
+				const fill = backgroundAnsi(theme.colors.syntaxVariable, mode);
+				const ink = foregroundAnsi(theme.colors.customMessageBg, mode);
+				const value = `${fill}${ink}\x1b[1m`;
 				return value.length > 0 ? value : undefined;
 			} catch {
 				return undefined;

@@ -85,8 +85,24 @@ const assertFill = (component, width = 80) => {
 	const raw = component.render(width);
 	const output = raw.map(plain);
 	assert(output[0].startsWith("▕") && output[0].endsWith("▏"), "edge strokes touch the interior; no centered/rounded border cells");
-	for (const line of raw.slice(0, -1)) {
+	// The status and copy labels are inverted chips: muted fill, code-surface ink.
+	const chipFill = backgroundAnsi(theme.colors.muted, theme.getColorMode());
+	const cellsByChar = (line) => {
+		const chars = [...plain(line)];
+		const backgrounds = cells(line).map((cell) => cell.background);
+		assert.equal(chars.length, backgrounds.length, "the cell model matches the plain header text");
+		return chars.map((char, index) => ({ char, background: backgrounds[index] }));
+	};
+	for (const line of raw.slice(1, -1)) {
 		assert.deepEqual(cells(line).map((cell) => cell.background), ["default", ...Array(width - 2).fill(expectedBackground()), "default"], "every interior cell is tinted, both outside border cells stay default");
+	}
+	const headerCells = cellsByChar(raw[0]);
+	assert.deepEqual(headerCells.slice(1, -1).filter((cell) => cell.background !== expectedBackground() && cell.background !== chipFill), [], "the header is only the code tint or a chip fill");
+	for (const label of ["[Copy]", "✓ Complete"]) {
+		const start = output[0].indexOf(label);
+		assert(start > 0, `${label} is on the header`);
+		assert(headerCells.slice(start, start + label.length).every((cell) => cell.background === chipFill), `${label} is a filled chip`);
+		assert.equal(headerCells[start - 1].background, expectedBackground(), `the rule beside ${label} keeps the code tint`);
 	}
 	assert.deepEqual(cells(raw.at(-1)).map((cell) => cell.background), Array(width).fill("default"), "nothing below the bottom rule is tinted");
 	assert.deepEqual(cells(raw.at(-1)).map((cell) => cell.overline), [false, ...Array(width - 2).fill(true), false], "bottom rule is at the top edge of unpainted cells");
@@ -258,7 +274,8 @@ for (const tool of ["read", "bash", "write", "edit"]) {
 	const toolCells = cells(toolHeader);
 	assert.equal(toolCells[codeStart].background, "default", "nested codeblock's left stroke remains untinted");
 	assert.equal(toolCells[codeEnd].background, "default", "nested codeblock's right stroke remains untinted");
-	assert(toolCells.slice(codeStart + 1, codeEnd).every((cell) => cell.background === expectedBackground()), `${tool} parent panel must not flatten the codeblock's reduced tint`);
+	const nestedChipFill = backgroundAnsi(theme.colors.muted, theme.getColorMode());
+	assert(toolCells.slice(codeStart + 1, codeEnd).every((cell) => cell.background === expectedBackground() || cell.background === nestedChipFill), `${tool} parent panel must not flatten the codeblock's reduced tint or its filled chips`);
 	assert(clickCopy(toolComponent)?.handled, `${tool} real nested mouse routing`);
 	await new Promise((resolve) => setImmediate(resolve));
 	assert.equal(copied.at(-1), tool === "write" ? args.content : tool === "edit" ? "- a\n+ b" : result.content[0].text);

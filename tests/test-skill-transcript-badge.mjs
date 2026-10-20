@@ -16,7 +16,7 @@ const jiti = createJiti(import.meta.url, { alias: {
 	"@earendil-works/pi-tui": join(modules, "@earendil-works/pi-tui/dist/index.js"),
 } });
 
-const { stripTerminalSequences, visibleWidth } =
+const { backgroundAnsi, foregroundAnsi, stripTerminalSequences, visibleWidth } =
 	await load(join(modules, "@earendil-works/pi-tui/dist/index.js"));
 const { default: extension, setActiveTheme, installSkillBadgeHook } = await jiti.import(
 	process.env.SKILL_BADGE_SOURCE || resolve("extensions/skill-transcript-badge.ts"));
@@ -55,10 +55,16 @@ for (const themeName of ["dark", "light"]) {
 	assert.equal(plain(collapsed[0]).trimEnd(), `▸ 💡 SKILL  think · ≈${tokens} tokens`);
 	assert(!plain(collapsed[0]).includes("SKILL.md"), "location is hidden until expanded");
 	assert(!plain(collapsed[0]).includes("lines"), "line count is hidden until expanded");
-	assert(collapsed[0].includes(theme.bold(theme.fg("syntaxVariable", "▸ 💡 SKILL"))), "teal invocation label is bold");
-	assert(collapsed[0].includes(theme.bold(theme.fg("text", "think"))), "skill name is bold primary text");
-	assert(collapsed[0].includes(theme.fg("muted", ` · ≈${tokens} tokens`)), "estimated tokens are muted");
-	assert(collapsed[0].includes("\u001b[48;2;"), "header has a theme-native background");
+	assert(collapsed[0].includes(theme.bold("▸ 💡 SKILL")), "invocation label is bold");
+	assert(collapsed[0].includes(theme.bold("think")), "skill name is bold");
+	assert(collapsed[0].includes(` · ≈${tokens} tokens`), "estimated tokens stay readable on the fill");
+	// Inverted chip: accent fill, surface-colored ink.
+	const fill = backgroundAnsi(theme.colors.syntaxVariable, theme.getColorMode());
+	const ink = foregroundAnsi(theme.colors.customMessageBg, theme.getColorMode());
+	assert(collapsed[0].includes(fill), "header is filled with the accent color");
+	assert(collapsed[0].includes(ink), "ink is the surface color of the transcript block");
+	assert(!collapsed[0].includes(theme.getBgAnsi("customMessageBg")), "the old subtle background is gone");
+	assert(!collapsed[0].includes(theme.fg("syntaxVariable", "▸")), "the label no longer carries accent text");
 
 	assert.equal(click(component, "right"), undefined, "right click does not toggle");
 	assert.equal(component.expanded, false);
@@ -121,7 +127,8 @@ for (const themeName of ["dark", "light"]) {
 	setActiveTheme(otherTheme);
 	component.invalidate();
 	assert.equal(component.expanded, true);
-	assert(component.render(120)[0].includes(otherTheme.bold(otherTheme.fg("syntaxVariable", "▾ 💡 SKILL"))));
+	assert(component.render(120)[0].includes(backgroundAnsi(otherTheme.colors.syntaxVariable, otherTheme.getColorMode())),
+		"theme invalidation repaints the fill");
 	setActiveTheme(theme);
 	component.invalidate();
 

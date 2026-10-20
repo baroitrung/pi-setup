@@ -8,6 +8,8 @@ import {
 	Container,
 	Markdown,
 	MouseRegion,
+	backgroundAnsi,
+	foregroundAnsi,
 	truncateToWidth,
 	visibleWidth,
 	type Component,
@@ -32,6 +34,21 @@ function resolveTheme(): {
 		bg: (_token, text) => text,
 		bold: (text) => `\x1b[1m${text}\x1b[22m`,
 	};
+}
+
+/** Inverted chip: the teal fills the row and the transcript surface becomes the ink. */
+function solidFill(): { open: string; close: string } | undefined {
+	if (!activeTheme) return undefined;
+	try {
+		const mode = activeTheme.getColorMode();
+		return {
+			open: backgroundAnsi(activeTheme.colors.syntaxVariable, mode)
+				+ foregroundAnsi(activeTheme.colors.customMessageBg, mode),
+			close: "\x1b[0m",
+		};
+	} catch {
+		return undefined;
+	}
 }
 
 function formatTokens(tokens: number): string {
@@ -78,15 +95,20 @@ export function installSkillBadgeHook(): void {
 		const header: Component = {
 			render(width: number): string[] {
 				const theme = resolveTheme();
+				const solid = solidFill();
 				const marker = `${expanded ? "▾" : "▸"} 💡 ${label}`;
-				const title = theme.bold(theme.fg("syntaxVariable", marker))
-					+ "  " + theme.bold(theme.fg("text", name));
+				// The filled chip carries the hierarchy in weight, not in a second hue.
+				const title = solid
+					? theme.bold(marker) + "  " + theme.bold(name)
+					: theme.bold(theme.fg("syntaxVariable", marker)) + "  " + theme.bold(theme.fg("text", name));
 				// Prefer a readable skill name over metadata on narrow terminals.
 				const stats = ` · ≈${tokenStr} tokens`;
-				const row = title + (visibleWidth(title + stats) <= width ? theme.fg("muted", stats) : "");
+				const row = title + (visibleWidth(title + stats) <= width ? (solid ? stats : theme.fg("muted", stats)) : "");
 				const clipped = truncateToWidth(row, Math.max(0, width));
 				const padding = " ".repeat(Math.max(0, width - visibleWidth(clipped)));
-				const headerRow = theme.bg("customMessageBg", clipped + padding);
+				const headerRow = solid
+					? solid.open + clipped + padding + solid.close
+					: theme.bg("customMessageBg", clipped + padding);
 				if (!expanded) return [headerRow];
 
 				const metadata = `  ${location ? `${location} · ` : ""}${linesCount} lines`;

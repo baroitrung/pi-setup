@@ -19,7 +19,7 @@ const jiti = createJiti(import.meta.url, { alias: {
 	"@earendil-works/pi-tui": join(modules, "@earendil-works/pi-tui/dist/index.js"),
 } });
 
-const { CURSOR_MARKER, TuiMainScreen, TuiAltScreen, stripTerminalSequences, visibleWidth } =
+const { CURSOR_MARKER, TuiMainScreen, TuiAltScreen, backgroundAnsi, foregroundAnsi, stripTerminalSequences, visibleWidth } =
 	await load(join(modules, "@earendil-works/pi-tui/dist/index.js"));
 const { CustomEditor } = await load(join(agent, "dist/index.js"));
 const { getEditorTheme, initTheme, loadThemeFromPath, setTheme, setTerminalColors, setThemeInstance, theme: activeTheme } =
@@ -29,7 +29,8 @@ const { KeybindingsManager } = await load(join(agent, "dist/core/keybindings.js"
 // `BG` is a *prefix* used to count painted ranges; `CHIP_OPEN` is the full
 // opening sequence the extension writes, derived from the live theme.
 const BG = "\x1b[48;2;";
-const CHIP_OPEN = () => activeTheme.getBgAnsi("customMessageBg") + activeTheme.getFgAnsi("syntaxVariable") + "\x1b[1m";
+const CHIP_OPEN = () => backgroundAnsi(activeTheme.colors.syntaxVariable, activeTheme.getColorMode())
+	+ foregroundAnsi(activeTheme.colors.customMessageBg, activeTheme.getColorMode()) + "\x1b[1m";
 const GLYPH = "💡";
 const BOLD = "\x1b[1m";
 setTerminalColors({ background: { r: 40, g: 44, b: 52 }, foreground: { r: 229, g: 231, b: 235 } });

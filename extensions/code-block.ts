@@ -1,5 +1,5 @@
 import { copyToClipboard, getLanguageFromPath, getMarkdownTheme, type ExtensionAPI, Theme, type ToolRenderers } from "@earendil-works/pi-coding-agent";
-import { backgroundAnsi, Markdown, mixColors, Text, stripTerminalSequences, truncateToWidth, visibleWidth, wrapTextWithAnsi, type Component, type TuiMouseEvent, type TuiMouseEventResult } from "@earendil-works/pi-tui";
+import { backgroundAnsi, foregroundAnsi, Markdown, mixColors, Text, stripTerminalSequences, truncateToWidth, visibleWidth, wrapTextWithAnsi, type Color, type Component, type TuiMouseEvent, type TuiMouseEventResult } from "@earendil-works/pi-tui";
 
 export type ToolRenderContext = Parameters<NonNullable<ToolRenderers["renderResult"]>>[3];
 
@@ -84,7 +84,7 @@ function track(component: Component) {
 
 const CODE_BLOCK_OPACITY = 0.15;
 const terminalDefaults = new Map<string, Theme>();
-function codeBackground(theme: Theme): string {
+function codeBackgroundColor(theme: Theme): Color {
 	const key = `${theme.appearance}:${theme.getColorMode()}`;
 	let defaults = terminalDefaults.get(key);
 	if (!defaults) {
@@ -97,7 +97,11 @@ function codeBackground(theme: Theme): string {
 	}
 	// An opaque 15% tint blended over Pi's reported terminal background, not alpha.
 	const tint = mixColors(theme.colors.toolPendingBg, theme.colors.text, 0.06, "srgb");
-	return backgroundAnsi(mixColors(defaults.colors.toolPendingBg, tint, CODE_BLOCK_OPACITY, "srgb"), theme.getColorMode());
+	return mixColors(defaults.colors.toolPendingBg, tint, CODE_BLOCK_OPACITY, "srgb");
+}
+
+function codeBackground(theme: Theme): string {
+	return backgroundAnsi(codeBackgroundColor(theme), theme.getColorMode());
 }
 
 /** Restore the surface after resets without discarding intentional nested ANSI colors. */
@@ -140,6 +144,16 @@ export class CodeBlock implements Component {
 	private palette() { return this.theme ?? runtime()?.palette?.(); }
 	private border(text: string) { return this.palette()?.fg("borderMuted", text) ?? getMarkdownTheme().codeBlockBorder(text); }
 	private muted(text: string) { return this.palette()?.fg("muted", text) ?? getMarkdownTheme().codeBlockBorder(text); }
+	/** Inverted chip: the muted hue fills the cell and the code surface becomes the ink. */
+	private chip(text: string): string {
+		const palette = this.palette();
+		if (!palette) return text;
+		const mode = palette.getColorMode();
+		return backgroundAnsi((palette.colors as Record<string, Color>).muted, mode)
+			+ foregroundAnsi(codeBackgroundColor(palette), mode)
+			+ text
+			+ "\x1b[49m\x1b[39m";
+	}
 	render(width: number): string[] {
 		width = Math.max(0, width);
 		this.copyStart = this.copyEnd = -1;
@@ -151,7 +165,7 @@ export class CodeBlock implements Component {
 		// metadata reads as part of the top border instead of floating under it.
 		const inset = width - 2;
 		const pad = inset >= 24 ? " " : "";
-		const right = `${inset >= 30 ? `${label(this.status)}  ` : ""}${action}`;
+		const right = `${inset >= 30 ? `${this.chip(label(this.status))}  ` : ""}${this.chip(action)}`;
 		const chrome = 2 + 4 * pad.length;
 		const heading = truncateToWidth(left, Math.max(0, inset - chrome - visibleWidth(right) - 1));
 		const rule = (columns: number) => this.border("─".repeat(Math.max(0, columns)));
