@@ -277,19 +277,23 @@ reload to restore native code presentation.
 skills. Also supports multi-skill pipeline chains such as `$think -> $work`
 or `$think ➔ $work`, combining stages sequentially into a single pipeline prompt.
 
-**`skill-highlight-editor.ts`** — draws known `/skill:<name>` invocations as bold
-teal `💡 name` chips on `customMessageBg`, after the stock editor lays out the
-prompt. The submitted text is unchanged. Four unpainted spaces preserve each
+**`skill-highlight-editor.ts`** — draws known `/skill:<name>` invocations as a
+bold `💡 name` chip after the stock editor lays out the prompt: `syntaxVariable`
+fills the chip and `customMessageBg` becomes the ink, so it matches the transcript
+badge. The submitted text is unchanged. Four unpainted spaces preserve each
 canonical token's original footprint, so following text and the caret keep their
 columns. While editing inside a token (including its first character), it stays
 literal and highlighted. `$<name>` aliases stay literal because the bulb chip
 would be wider than the alias. Names resolve against the real skill registry;
-unknown names are not painted.
+unknown names are not painted. Pi's zero-width private markers (`\x1b_pi:c`,
+`\x1b_pi:fc`, `\x1b_pi:/fc`) are treated as escapes, so a token the cursor sits
+inside is still recognised and painted.
 
 The same editor replaces Pi's simulated block cursor with a **steady vertical
 beam** using the terminal's native cursor (DECSCUSR). It preserves Pi's zero-width
 cursor marker and lets the TUI handle placement and focus, including IME and
-fullscreen/regular mode. A focused editor renews native cursor visibility if
+fullscreen/regular mode. The fake-cursor cell is hidden in both spellings: Pi 1.3's
+`\x1b_pi:fc...\x1b_pi:/fc` region and the older `\x1b[7m` inverse video. A focused editor renews native cursor visibility if
 Pi reapplies persisted settings after `/reload`; an inactive or released editor
 does not. No settings file or upstream Pi patch is needed. On reload/exit it
 restores the prior hardware-cursor visibility and requests the
@@ -329,9 +333,9 @@ compact invocation header, without full-width divider rules or frames:
 ▸ 💡 SKILL  think · ≈3.8k tokens
 ```
 
-The invocation label is bold teal (`syntaxVariable`), the skill name is bold primary
-text, and estimated tokens are muted, on a subtle theme-native `customMessageBg`
-header background. Collapsed messages occupy one row; narrow terminals omit token
+The header is a filled chip with the colors inverted: `syntaxVariable` fills the
+whole row and `customMessageBg` is the ink, so the label and the skill name keep
+their weight through bold rather than a second hue. Collapsed messages occupy one row; narrow terminals omit token
 metadata before truncating the name. Token counts are estimates based on content length.
 
 Mouse click or `Ctrl+O` expands the message without adding a border:
