@@ -220,8 +220,9 @@ function installToolSpacingHook(): void {
 	};
 }
 
-// A hairline rule stays crisp at any font size and cannot look like a chunky block.
-const USER_BAR = "\x1b[38;2;198;120;221m\u2502\x1b[39m";
+// A left quarter block fills the whole cell height; box-drawing `│` only covers the
+// middle third of it, which breaks the rule between wrapped lines.
+const USER_BAR = "\x1b[38;2;198;120;221m\u258e\x1b[39m";
 // Any accent bar already on the line: the OpenCode WIP drew a `▌` in the same accent, and an
 // earlier load of this file drew its own. Unpainting them all before painting keeps one rule.
 const BAR_AT_START = /^((?:\x1b\[[\d;]*m)*)\x1b\[38;2;198;120;221m[\u258c\u258e\u258d\u258f\u2590\u2502\u2503]\x1b\[39m/;

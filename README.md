@@ -213,8 +213,9 @@ extension statuses; `/builtin-footer` restores them.
 ```
 
 Adjacent collapsed tool calls sit back-to-back without blank lines. User
-messages get a hairline accent rule (`│`) down their own markdown lines only, so
-the padding rows above and below stay clear. The rule is repainted from the
+messages get a one-cell accent rule (`▎`, left quarter block) down their own
+markdown lines only, so the padding rows above and below stay clear. A block
+glyph is used because box-drawing `│` only spans the middle third of the cell. The rule is repainted from the
 original render on reload, so a session that loaded an older rule glyph collapses
 back to one bar instead of stacking them.
 In fullscreen mode, click the tool header after a result arrives to expand it;
