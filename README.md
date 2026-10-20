@@ -213,7 +213,7 @@ extension statuses; `/builtin-footer` restores them.
 ```
 
 Adjacent collapsed tool calls sit back-to-back without blank lines. User
-messages get a single-cell accent rule (`▏`, one-eighth block) down their own
+messages get a single-cell accent rule (`▎`, one-quarter block) down their own
 markdown lines only, so the padding rows above and below stay clear.
 In fullscreen mode, click the tool header after a result arrives to expand it;
 click again to collapse it. `Ctrl+O` expands/collapses all tools and also works

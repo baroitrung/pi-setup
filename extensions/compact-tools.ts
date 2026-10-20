@@ -220,8 +220,8 @@ function installToolSpacingHook(): void {
 	};
 }
 
-// A single left-eighth block keeps the rule one cell wide, the thinnest glyph the grid offers.
-const USER_BAR = "\x1b[38;2;198;120;221m\u258f\x1b[39m";
+// A left quarter block keeps the rule one cell wide while staying visible at any font size.
+const USER_BAR = "\x1b[38;2;198;120;221m\u258e\x1b[39m";
 const OSC_PREFIX = /^((?:\x1b\]\d+;[^\x07]*\x07)+)/;
 const LEADING_SPACE_AFTER_SGR = /^((?:\x1b\[[\d;]*m)*) /;
 

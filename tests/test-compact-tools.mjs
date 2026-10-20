@@ -131,9 +131,9 @@ selectTheme("dark");
 	assert(lines.every((line) => visibleWidth(line) === 60), "the bar replaces padding instead of widening the message");
 	assert.equal(lines[0].trim(), "", "the padding row above the message stays clear");
 	assert.equal(lines.at(-1).trim(), "", "the padding row below the message stays clear");
-	assert.deepEqual(lines.slice(1, -1).map((line) => line.startsWith("▏")), [true, true, true],
+	assert.deepEqual(lines.slice(1, -1).map((line) => line.startsWith("▎")), [true, true, true],
 		"every body line, including a blank one between paragraphs, keeps the rule continuous");
-	assert.equal(lines.join("").split("▏").length - 1, 3, "exactly one rule cell per body line");
+	assert.equal(lines.join("").split("▎").length - 1, 3, "exactly one rule cell per body line");
 }
 for (const theme of themes) {
 	selectTheme(theme);
