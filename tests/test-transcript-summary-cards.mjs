@@ -1,12 +1,21 @@
+// Run from the repository root: node tests/test-transcript-summary-cards.mjs
 import assert from "node:assert/strict";
-import { createJiti } from "/home/tinhpt/.pi/agent/install/releases/1.0.4/node_modules/jiti/lib/jiti.mjs";
+import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
+
+const install = join(homedir(), ".pi/agent/install");
+const modules = process.env.PI_NODE_MODULES || join(install, "releases",
+	readFileSync(join(install, "current-version"), "utf8").trim(), "node_modules");
+const agent = join(modules, "@earendil-works/pi-coding-agent");
+const load = (file) => import(pathToFileURL(file).href);
+const { createJiti } = await load(join(modules, "jiti/lib/jiti.mjs"));
 
 const jiti = createJiti(import.meta.url, {
 	alias: {
-		"@earendil-works/pi-coding-agent":
-			"/home/tinhpt/.pi/agent/install/releases/1.0.4/node_modules/@earendil-works/pi-coding-agent/dist/index.js",
-		"@earendil-works/pi-tui":
-			"/home/tinhpt/.pi/agent/install/releases/1.0.4/node_modules/@earendil-works/pi-tui/dist/index.js",
+		"@earendil-works/pi-coding-agent": join(agent, "dist/index.js"),
+		"@earendil-works/pi-tui": join(modules, "@earendil-works/pi-tui/dist/index.js"),
 	},
 });
 
@@ -14,16 +23,16 @@ const {
 	initTheme,
 	setTheme,
 	theme,
-} = await import("/home/tinhpt/.pi/agent/install/releases/1.0.4/node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js");
+} = await load(join(agent, "dist/modes/interactive/theme/theme.js"));
 
-const { stripTerminalSequences, visibleWidth } = await import(
-	"/home/tinhpt/.pi/agent/install/releases/1.0.4/node_modules/@earendil-works/pi-tui/dist/index.js"
+const { stripTerminalSequences, visibleWidth } = await load(
+	join(modules, "@earendil-works/pi-tui/dist/index.js"),
 );
 
 const {
 	BranchSummaryMessageComponent,
 	CompactionSummaryMessageComponent,
-} = await import("/home/tinhpt/.pi/agent/install/releases/1.0.4/node_modules/@earendil-works/pi-coding-agent/dist/index.js");
+} = await load(join(agent, "dist/index.js"));
 
 const { default: extension, setActiveTheme } = await jiti.import(
 	"../extensions/transcript-summary-cards.ts",
