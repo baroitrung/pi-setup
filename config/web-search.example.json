@@ -1,11 +1,29 @@
 {
   "webSearch": {
-    "allowedProviders": ["tinyfish", "firecrawl"]
+    "allowedProviders": [
+      "exa",
+      "tinyfish",
+      "firecrawl",
+      "duckduckgo"
+    ]
   },
   "searchRouting": {
-    "providers": ["tinyfish", "firecrawl"],
-    "fallbackOn": ["transient", "quota", "network", "invalid-response"]
+    "providers": [
+      "exa",
+      "tinyfish",
+      "firecrawl",
+      "duckduckgo"
+    ],
+    "fallbackOn": [
+      "transient",
+      "quota",
+      "credential",
+      "auth",
+      "network",
+      "invalid-response"
+    ]
   },
+  "exaApiKey": "!$HOME/.pi/agent/scripts/get-secret.sh EXA_API_KEY",
   "tinyfishApiKey": "!$HOME/.pi/agent/scripts/get-secret.sh TINYFISH_API_KEY",
   "firecrawlBaseUrl": "https://api.firecrawl.dev",
   "firecrawlApiKey": "!$HOME/.pi/agent/scripts/get-secret.sh FIRECRAWL_API_KEY",
