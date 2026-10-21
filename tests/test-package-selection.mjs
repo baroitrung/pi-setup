@@ -24,9 +24,9 @@ const expected = [
 	"npm:pi-memory",
 	"npm:pi-subagents@0.77.0",
 	"npm:@narumitw/pi-goal",
-	// Under evaluation (2026-10-21): pi-lens for post-edit diagnostics,
-	// context-mode for tool-output sandboxing. Neither has proven itself yet.
-	"npm:pi-lens",
+	// Under evaluation (2026-10-21): context-mode for tool-output sandboxing.
+	// It has not proven itself yet. pi-lens and pi-condense were trialled and
+	// removed the same day — see the dropped list below.
 	"npm:context-mode",
 ];
 assert.deepEqual([...sources].sort(), [...expected].sort(), "the package list is exactly the tracked set");
@@ -42,9 +42,13 @@ for (const dropped of [
 	"npm:@tmustier/pi-session-recap",
 	"npm:pi-simplify",
 	"npm:pi-diff-review@0.1.27",
+	"npm:pi-lens",
+	"npm:pi-condense",
 ]) {
 	assert(!sources.includes(dropped), `${dropped} was trimmed and must not come back silently`);
 }
+assert(!Object.hasOwn(settings, "contextPrune"),
+	"pi-condense config must not linger after the package was removed");
 assert(sources.includes("npm:@narumitw/pi-goal"), "the standalone goal package must be enabled");
 for (const alternate of ["npm:@tintinweb/pi-subagents", "npm:@gotgenes/pi-subagents"]) {
 	assert(!packageIds.includes(alternate), "only one subagent implementation may be enabled");
