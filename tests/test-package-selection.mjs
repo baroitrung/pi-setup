@@ -24,6 +24,9 @@ const expected = [
 	"npm:pi-memory",
 	"npm:pi-subagents@0.77.0",
 	"npm:@narumitw/pi-goal",
+	// Render-only (2026-10-21): pi-pigment decorates the eight built-in tool
+	// renderers and registers no tool, so it costs no tool schema.
+	"npm:pi-pigment",
 	// Under evaluation (2026-10-21): context-mode for tool-output sandboxing.
 	// It has not proven itself yet. pi-lens and pi-condense were trialled and
 	// removed the same day — see the dropped list below.
@@ -66,6 +69,10 @@ for (const inactive of [
 }
 assert(!sources.some((source) => source.includes("mitsuhiko/agent-stuff") || source.startsWith("npm:mitsupi")),
 	"the old mitsupi bundle must not overlap with the standalone goal/subagent packages");
+// UI packages must stay render-only: a footer owner or a second tool renderer can
+// silently displace extensions/custom-footer.ts or bloat the tool schema.
+assert(!packageIds.some((id) => /powerline|slate|pi-coder|arnative|cc-extensions|footer/.test(id)),
+	"only custom-footer.ts owns the footer; no second footer/TUI suite may be installed");
 assert.equal(settings.theme, "system");
 assert.equal(settings.lastChangelogVersion, "1.3.0");
 assert.equal(settings.defaultProvider, "opencode-go");
