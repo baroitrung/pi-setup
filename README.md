@@ -26,6 +26,7 @@ bash setup/install.sh --dry-run
 | `extensions/account-pool/` | `~/.pi/agent/extensions/account-pool/` | Multi-file extension: Antigravity account pool with per-model cooldown (`/pool`) |
 | `extensions/rewind/` | `~/.pi/agent/extensions/rewind/` | Multi-file extension: trim old tool results from the model context (`/rewind`) |
 | `scripts/get-secret.sh` | `~/.pi/agent/scripts/` | Reads one key from `~/.env`; mode `700` |
+| `agents/*.md` | `~/.pi/agent/agents/` | Subagent profiles (agent frontmatter + prompt) |
 | `config/settings.json` | `~/.pi/agent/settings.json` | Installed only if absent — otherwise diffed |
 | `config/models.json` | `~/.pi/agent/models.json` | Provider/model compat overrides; credentials stay in `auth.json` |
 | `config/web-search.example.json` | `~/.pi/agent/web-search.json` | Same rule; **this is an example, edit it** |
@@ -40,6 +41,39 @@ load a `<name>.backup.<timestamp>/` sibling as a second copy of the extension.
 Your live `settings.json`, `models.json`, and `web-search.json` are **never
 clobbered** on a re-run — the script prints a unified diff and leaves the decision
 to you. Pass `--force` to overwrite anyway (a backup is still taken).
+
+## Worker agents
+
+`pi-subagents` ships a `worker` profile whose tool list is a strict allowlist:
+`read, grep, find, ls, bash, edit, write, contact_supervisor`. That is deliberate — a writer
+child should not wander — but it also makes the bundled worker blind to this setup's code
+intelligence: no `lsp_diagnostics`, no `memory_search`, and `inheritSkills: false` so it cannot
+see the installed skills either.
+
+`agents/worker-lsp.md` closes that gap without handing the worker the whole toolbox:
+
+| Field | Value | Why |
+| :--- | :--- | :--- |
+| `tools` | worker's allowlist + `lsp_*`, `ast_search`, `code_rewrite`, `code_overview`, `memory_search`, `memory_read`, `scratchpad` | code intel plus read-only memory (no `memory_write` — a child does not edit long-term memory) |
+| `extensions` | `~/.pi/agent/npm/node_modules/pi-lsp-extension/dist/index.js`, `.../pi-memory/index.ts` | foreground children never load ambient extensions, so an allowlisted name alone does **not** load its provider; the paths must be listed |
+| `inheritSkills` | `true` | the worker can follow this repo's own skills (`work`, `check`, `hunt`, …) |
+| `timeoutMs` | `1500000` (25 min) | per-run cost and latency ceiling |
+| `acceptance` | `checked` | the run must pass an acceptance gate, not just claim success |
+
+Launch it like any other agent; keep `worktree: true` for write isolation:
+
+```js
+subagent({ agent: "worker-lsp", task: "…", worktree: true })
+```
+
+Verified 2026-10-21 with a read-only probe child: `memory_search`, `lsp_diagnostics`, and
+`lsp_symbols` all registered and returned real output. Without the explicit `extensions`
+line, the same launch reports the tools as missing.
+
+Deliberately **not** configured: no sandbox. Children run with an unrestricted `bash` in the
+parent environment. Use `worktree: true` for isolation of writes; if you later want
+bwrap/container execution, add a `launcher` frontmatter entry (see pi-subagents
+`docs/agents.md`).
 
 ## Machine → repo sync
 

@@ -11,6 +11,7 @@
 # What it does:
 #   1. Copies extensions/  → ~/.pi/agent/extensions/
 #   2. Copies scripts/     → ~/.pi/agent/scripts/
+#   2b. Copies agents/     → ~/.pi/agent/agents/  (subagent profiles)
 #   3. Handles settings.json (install if new, otherwise show a diff)
 #   4. Handles models.json (provider/model compat overrides; same rule)
 #   5. Handles web-search.json from web-search.example.json (same rule)
@@ -113,7 +114,7 @@ if [ ! -d "$PI_DIR" ]; then
 fi
 
 # --- Step 1: directories -----------------------------------------------------
-run mkdir -p "$PI_DIR/extensions" "$PI_DIR/scripts"
+run mkdir -p "$PI_DIR/extensions" "$PI_DIR/scripts" "$PI_DIR/agents"
 green "✓ Directories ready"
 
 # --- Step 2: extensions ------------------------------------------------------
@@ -135,6 +136,15 @@ echo "Scripts"
 for f in "$REPO_DIR/scripts/"*; do
   [ -f "$f" ] || continue
   sync_file "$f" "$PI_DIR/scripts/$(basename "$f")" 700
+done
+
+# --- Step 3b: subagent profiles ----------------------------------------------
+# Custom agent definitions (markdown + frontmatter) live in ~/.pi/agent/agents/.
+# They override bundled pi-subagents agents of the same name.
+echo ""
+echo "Agents"
+for f in "$REPO_DIR/agents/"*.md; do
+  sync_file "$f" "$PI_DIR/agents/$(basename "$f")"
 done
 
 # --- Step 4: settings.json ---------------------------------------------------
@@ -206,6 +216,7 @@ echo "------------"
 count_ext=$(find "$PI_DIR/extensions" -maxdepth 1 -name "*.ts" 2>/dev/null | wc -l | tr -d ' ')
 echo "  extensions/     : $count_ext TypeScript extensions"
 echo "  scripts/        : $(find "$PI_DIR/scripts" -maxdepth 1 -type f 2>/dev/null | wc -l | tr -d ' ') scripts"
+echo "  agents/         : $(find "$PI_DIR/agents" -maxdepth 1 -name "*.md" 2>/dev/null | wc -l | tr -d ' ') subagent profiles"
 echo "  settings.json   : $([ -f "$SETTINGS_DEST" ] && echo present || echo MISSING)"
 echo "  models.json     : $([ -f "$MODELS_DEST" ] && echo present || echo MISSING)"
 echo "  web-search.json : $([ -f "$WS_DEST" ] && echo present || echo MISSING)"
