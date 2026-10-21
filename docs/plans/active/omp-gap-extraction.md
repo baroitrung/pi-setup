@@ -117,11 +117,17 @@ listed only two providers. Credentials on this machine are `EXA`, `TINYFISH`,
 
 ```
 exa -> tinyfish -> firecrawl -> duckduckgo
-fallbackOn: transient, quota, credential, auth, network, invalid-response
+fallbackOn: transient, quota, network, invalid-response, unsupported
 ```
 
-- `credential` and `auth` were **added to `fallbackOn`** on purpose: without them a
-  missing key fails instead of walking to the keyless tail.
+- Only those five kinds may appear in `fallbackOn`; the loader rejects anything else.
+  An earlier attempt to add `credential`/`auth` broke `pi-web-access` outright — the
+  extension refused to load at all, and `web_search` disappeared. Caught during a
+  package inventory, not by the tests: the running session still held the previous
+  config in memory, which is why the first live check looked green.
+- A provider whose credential cannot be resolved is skipped before the call, so a
+  missing key still degrades to the next provider; runtime auth failures are not
+  routable by design.
 - `webSearch.allowedProviders` had to be extended too — it is an allowlist, not a hint.
 - Applied to `config/web-search.example.json` **and** the live
   `~/.pi/agent/web-search.json`, because `install.sh` deliberately never overwrites live

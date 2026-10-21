@@ -17,10 +17,9 @@
     "fallbackOn": [
       "transient",
       "quota",
-      "credential",
-      "auth",
       "network",
-      "invalid-response"
+      "invalid-response",
+      "unsupported"
     ]
   },
   "exaApiKey": "!$HOME/.pi/agent/scripts/get-secret.sh EXA_API_KEY",

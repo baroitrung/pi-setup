@@ -14,9 +14,16 @@ const keyed = ["exa", "tinyfish", "firecrawl"];
 
 assert.deepEqual(config.webSearch.allowedProviders, providers);
 assert.deepEqual(config.searchRouting.providers, providers);
+// The loader accepts exactly these five kinds; anything else fails the whole
+// extension at startup (credential/auth are not routable by design).
 assert.deepEqual(config.searchRouting.fallbackOn, [
-	"transient", "quota", "credential", "auth", "network", "invalid-response",
+	"transient", "quota", "network", "invalid-response", "unsupported",
 ]);
+assert.equal(
+	new Set(config.searchRouting.fallbackOn).size,
+	config.searchRouting.fallbackOn.length,
+	"fallback kinds must be unique",
+);
 for (const field of ["provider", "searchProvider"]) {
 	assert(!Object.hasOwn(config, field), `${field} would override the fallback route`);
 }
@@ -34,4 +41,4 @@ assert.deepEqual(config.fetchRouting.providers, [
 	"kagi", "ollama", "parallel", "brightdata", "gemini",
 ]);
 assert.equal(config.fetchRouting.allowRemoteHostedProviders, true);
-console.log("PASS: exa → tinyfish → firecrawl → keyless duckduckgo, credential fallback, command credentials, unchanged fetch policy");
+console.log("PASS: exa → tinyfish → firecrawl → keyless duckduckgo, routable fallback kinds, command credentials, unchanged fetch policy");

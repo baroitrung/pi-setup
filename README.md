@@ -170,10 +170,12 @@ degrades instead of failing. The first three read their keys from `~/.env` throu
 `get-secret.sh`; DuckDuckGo needs no credential at all. The existing fetch provider
 order is unchanged.
 
-Search falls back on transient, quota, **credential**, auth, network, or
-invalid-response errors — `credential`/`auth` are what let a keyless tail take over.
-An explicit provider request stays strict; it does not use the fallback route.
-The search allowlist also rejects explicit requests for other providers.
+Search falls back on `transient`, `quota`, `network`, `invalid-response`, and
+`unsupported` — the only five kinds the loader accepts; anything else refuses to load
+the whole extension. A provider whose credential does not resolve is skipped before the
+call, which is what lets the keyless tail keep search alive. An explicit provider request
+stays strict; it does not use the fallback route. The search allowlist also rejects
+explicit requests for other providers.
 
 For an existing installation, merge these fields into
 `~/.pi/agent/web-search.json` (keep the rest of your config):
@@ -185,7 +187,7 @@ For an existing installation, merge these fields into
   },
   "searchRouting": {
     "providers": ["exa", "tinyfish", "firecrawl", "duckduckgo"],
-    "fallbackOn": ["transient", "quota", "credential", "auth", "network", "invalid-response"]
+    "fallbackOn": ["transient", "quota", "network", "invalid-response", "unsupported"]
   },
   "exaApiKey": "!$HOME/.pi/agent/scripts/get-secret.sh EXA_API_KEY",
   "tinyfishApiKey": "!$HOME/.pi/agent/scripts/get-secret.sh TINYFISH_API_KEY",
