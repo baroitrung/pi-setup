@@ -12,16 +12,8 @@
     "npm:pi-web-access",
     "npm:@juicesharp/rpiv-ask-user-question",
     "npm:@juicesharp/rpiv-todo",
-    "npm:pi-diff-review@0.1.27",
     "npm:pi-lsp-extension@1.4.0",
     "npm:pi-memory",
-    "npm:@tmustier/pi-session-recap",
-    "npm:pi-browser-use",
-    "npm:pi-simplify",
-    "npm:pi-mcp-adapter",
-    "npm:@latentminds/pi-quotas",
-    "npm:pi-cache-optimizer",
-    "npm:pi-context-view",
     "npm:pi-subagents@0.77.0",
     "npm:@narumitw/pi-goal"
   ],
@@ -33,8 +25,5 @@
   },
   "defaultProvider": "opencode-go",
   "defaultModel": "deepseek-v4.1-flash",
-  "defaultThinkingLevel": "high",
-  "extensions": [
-    "-builtin:mcp"
-  ]
+  "defaultThinkingLevel": "high"
 }

@@ -11,11 +11,10 @@
 # What it does:
 #   1. Copies extensions/  → ~/.pi/agent/extensions/
 #   2. Copies scripts/     → ~/.pi/agent/scripts/
-#   3. Installs extensions/quotas.json
-#   4. Handles settings.json (install if new, otherwise show a diff)
-#   5. Handles models.json (provider/model compat overrides; same rule)
-#   6. Handles web-search.json from web-search.example.json (same rule)
-#   7. Verifies and prints the remaining manual steps
+#   3. Handles settings.json (install if new, otherwise show a diff)
+#   4. Handles models.json (provider/model compat overrides; same rule)
+#   5. Handles web-search.json from web-search.example.json (same rule)
+#   6. Verifies and prints the remaining manual steps
 
 set -euo pipefail
 shopt -s nullglob
@@ -129,8 +128,6 @@ for d in "$REPO_DIR/extensions/"*/; do
   name="$(basename "$d")"
   sync_tree "$d" "$PI_DIR/extensions/$name"
 done
-# quotas.json belongs to the @latentminds/pi-quotas package but lives in extensions/
-sync_file "$REPO_DIR/config/quotas.json" "$PI_DIR/extensions/quotas.json"
 
 # --- Step 3: scripts ---------------------------------------------------------
 echo ""

@@ -25,7 +25,6 @@ bash setup/install.sh --dry-run
 | `extensions/*.ts` | `~/.pi/agent/extensions/` | Gradient banner, compact statusline/tool calls, `$skill` autocomplete |
 | `extensions/account-pool/` | `~/.pi/agent/extensions/account-pool/` | Multi-file extension: Antigravity account pool with per-model cooldown (`/pool`) |
 | `extensions/rewind/` | `~/.pi/agent/extensions/rewind/` | Multi-file extension: trim old tool results from the model context (`/rewind`) |
-| `config/quotas.json` | `~/.pi/agent/extensions/` | Config for the `pi-quotas` package |
 | `scripts/get-secret.sh` | `~/.pi/agent/scripts/` | Reads one key from `~/.env`; mode `700` |
 | `config/settings.json` | `~/.pi/agent/settings.json` | Installed only if absent — otherwise diffed |
 | `config/models.json` | `~/.pi/agent/models.json` | Provider/model compat overrides; credentials stay in `auth.json` |
@@ -471,35 +470,35 @@ After installing, run `/reload` in Pi to check both components visually.
 
 ## Packages
 
-`config/settings.json` lists the Pi packages this setup expects. Trim the list
-to what you actually use; Pi resolves configured packages on startup.
+`config/settings.json` lists the eight packages this setup keeps. The list was cut
+on 2026-10-21 after measuring real usage across 158 sessions rather than guessing:
 
+| Package | Why it stays |
+| :--- | :--- |
+| `pi-antigravity` | the provider: Antigravity models plus `google_search` / `generate_image` |
+| `pi-web-access` | `web_search`, `fetch_content`, `source_check` |
+| `@juicesharp/rpiv-todo` | the `todo` tool (738 calls) |
+| `@juicesharp/rpiv-ask-user-question` | `ask_user_question` (36 calls) |
+| `pi-memory` | six `memory_*` tools plus `scratchpad` |
+| `pi-lsp-extension@1.4.0` | `lsp_diagnostics` (151 calls), `code_overview`, `ast_search` |
+| `pi-subagents@0.77.0` | `subagent`, `bg_wait`, FleetView |
+| `@narumitw/pi-goal` | `goal_*` tools and `/goal` |
 
-### Browser executable
+Dropped, and why they should not come back without a measurement:
 
-The shared template leaves `pi-browser-use.executablePath` unset. The extension
-uses `CHROME_PATH` when it points to an existing file, then checks standard
-Chrome/Chromium locations for the current OS. Install Chrome separately; this
-bootstrap does not install a browser.
+- **`pi-browser-use` + `pi-mcp-adapter`** — 34 of 71 tools in every request for 23
+  lifetime calls; the adapter existed to bridge that plugin's `plugin.json`.
+- **`@latentminds/pi-quotas`, `pi-context-view`, `pi-session-recap`, `pi-simplify`,
+  `pi-cache-optimizer`, `pi-diff-review`** — commands and UI only, zero measured use;
+  quota and context state already show in the footer and `/antigravity.usage`.
 
-If your live `~/.pi/agent/settings.json` still contains the old macOS Brave path,
-back up that file and remove only `pi-browser-use.executablePath`, preserving
-other browser settings. An explicit path takes precedence over discovery and
-fails if the file is missing. Keep a Brave or other custom-browser path only in
-your machine-local settings, not in the shared template. Re-running the installer
-without `--force` does not migrate existing settings; do not use `--force` just
-for this change. Restart Pi or run `/reload` after editing.
+`pi-lsp-extension` still exposes eleven tools even though only diagnostics is used in
+practice; trimming that further means an active-tools filter, which this setup does
+not carry yet. LSP servers are installed separately (`typescript-language-server`
+plus `typescript` for JS/TS, `jdtls` for Java); without one, the tools fall back to
+tree-sitter analysis, which is not type checking.
 
-### Diff review and LSP
-
-- `npm:pi-diff-review@0.1.27`: `/diff`, `/diff --cached`, `/diff main...HEAD`,
-  and `/view` for inline review comments.
-- `npm:pi-lsp-extension@1.4.0`: `/lsp` and language-intelligence tools.
-  Install the language server separately, for example `typescript-language-server`
-  plus `typescript` for JS/TS, or `jdtls` for Java. Without a server, supported
-  tools can fall back to tree-sitter syntax analysis; that is not type checking.
-
-These versions are pinned to the releases tested with Pi 1.0.4.
+Restart Pi or run `/reload` after changing the package selection.
 
 ### Parallel subagents and goals
 
@@ -518,7 +517,6 @@ delegation needs a separate end-to-end check; configuration sync does not prove 
 pi-setup/
 ├── config/
 │   ├── models.json
-│   ├── quotas.json
 │   ├── settings.json
 │   └── web-search.example.json
 ├── extensions/
