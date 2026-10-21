@@ -23,6 +23,8 @@ bash setup/install.sh --dry-run
 | From | To | Notes |
 | :--- | :--- | :--- |
 | `extensions/*.ts` | `~/.pi/agent/extensions/` | Gradient banner, compact statusline/tool calls, `$skill` autocomplete |
+| `extensions/account-pool/` | `~/.pi/agent/extensions/account-pool/` | Multi-file extension: Antigravity account pool with per-model cooldown (`/pool`) |
+| `extensions/rewind/` | `~/.pi/agent/extensions/rewind/` | Multi-file extension: trim old tool results from the model context (`/rewind`) |
 | `config/quotas.json` | `~/.pi/agent/extensions/` | Config for the `pi-quotas` package |
 | `scripts/get-secret.sh` | `~/.pi/agent/scripts/` | Reads one key from `~/.env`; mode `700` |
 | `config/settings.json` | `~/.pi/agent/settings.json` | Installed only if absent — otherwise diffed |
@@ -30,7 +32,11 @@ bash setup/install.sh --dry-run
 | `config/web-search.example.json` | `~/.pi/agent/web-search.json` | Same rule; **this is an example, edit it** |
 
 `install.sh` is idempotent. It copies a file only when the contents differ, and
-backs up anything it overwrites to `<file>.backup.<timestamp>`.
+backs up anything it overwrites to `<file>.backup.<timestamp>`. A directory under
+`extensions/` that contains an `index.ts` is copied as one unit, because that is how
+Pi loads a multi-file extension; its backup goes to
+`~/.pi/agent/backups/extensions/<name>.<timestamp>/` instead, since Pi would happily
+load a `<name>.backup.<timestamp>/` sibling as a second copy of the extension.
 
 Your live `settings.json`, `models.json`, and `web-search.json` are **never
 clobbered** on a re-run — the script prints a unified diff and leaves the decision
@@ -102,13 +108,70 @@ EXA_API_KEY=xxxxxxxx
 TINYFISH_API_KEY=sk-tinyfish-xxxxxxxx
 ```
 
+## Antigravity account pool
+
+`extensions/account-pool/` adds the part `pi-antigravity` leaves out. The provider
+already rotates accounts, but only *inside* one request: after a hard quota wall it
+walks to the next login, then the next request starts on the exhausted account again.
+
+This extension keeps the memory:
+
+- **Per-model cooldown.** A wall on `gemini-3.8-flash` blocks that model for that
+  account until the provider's own reset hint (`Please wait 4h 12m`) passes; other
+  models on the same account stay usable.
+- **Sticky selection.** Implicit prompt caching is scoped to `(account, projectId)`,
+  so the account only moves when it is actually walled. Round-robin would throw the
+  cached prefix away on every request.
+- **Visibility.** `/pool` prints who is blocked, until when, and who is active.
+
+```text
+/pool            status table
+/pool next       switch to the best healthy account now
+/pool heal       drop expired blocks
+/pool reset      clear every block
+```
+
+How it steers: it rewrites the `antigravity` entry in `~/.pi/agent/auth.json` and mirrors
+`activeAccountId` into `~/.pi/agent/antigravity-accounts.json`. Pi re-reads
+`auth.json` whenever its revision changes, so the switch lands on the next request with
+no restart. Cooldown bookkeeping lives in `~/.pi/agent/account-pool-state.json`
+(mode `600`, no tokens).
+
+Classification is deliberately narrow: only the provider's hard-wall text counts
+(`Quota reached.`). Transient throttling (`Rate limited by Antigravity`) and dead models
+(`This model is unavailable right now`) do not burn an account. The extension hooks
+`agent_end` rather than `after_provider_response`, because a custom API registered
+through `registerApiProvider` never calls `options.onResponse` — that hook is blind here.
+
+## Rewind: keep the decisions, drop the bulk
+
+`extensions/rewind/` trims what the model re-reads on every request without editing the
+session. Tool results older than the last N messages collapse into one-line stubs; user
+and assistant messages are never touched.
+
+```text
+/rewind                 arm it (keep 8 messages, min 1500 chars)
+/rewind keep 12         keep a larger verbatim tail
+/rewind min 400         prune smaller results too
+/rewind status          show settings and the last pass
+/rewind off             restore the full transcript
+```
+
+It works through Pi's `context` hook, whose returned messages are exactly what the
+provider receives, so **nothing is written to the session file** — `/rewind off` is
+instant and lossless, and a resume restores the armed state from a custom entry. The
+first pass announces how much it saved; after that it stays quiet.
+
 ## Web search providers
 
-`config/web-search.example.json` restricts search to **TinyFish first, Firecrawl
-as fallback**. Both credentials use `get-secret.sh` to read `~/.env` on demand;
-no keys are stored in the config. The existing fetch provider order is unchanged.
+`config/web-search.example.json` routes search through **Exa → TinyFish → Firecrawl →
+DuckDuckGo**, cheapest-capable first and keyless last, so an expired or missing key
+degrades instead of failing. The first three read their keys from `~/.env` through
+`get-secret.sh`; DuckDuckGo needs no credential at all. The existing fetch provider
+order is unchanged.
 
-Search falls back only on transient, quota, network, or invalid-response errors.
+Search falls back on transient, quota, **credential**, auth, network, or
+invalid-response errors — `credential`/`auth` are what let a keyless tail take over.
 An explicit provider request stays strict; it does not use the fallback route.
 The search allowlist also rejects explicit requests for other providers.
 
@@ -118,12 +181,13 @@ For an existing installation, merge these fields into
 ```json
 {
   "webSearch": {
-    "allowedProviders": ["tinyfish", "firecrawl"]
+    "allowedProviders": ["exa", "tinyfish", "firecrawl", "duckduckgo"]
   },
   "searchRouting": {
-    "providers": ["tinyfish", "firecrawl"],
-    "fallbackOn": ["transient", "quota", "network", "invalid-response"]
+    "providers": ["exa", "tinyfish", "firecrawl", "duckduckgo"],
+    "fallbackOn": ["transient", "quota", "credential", "auth", "network", "invalid-response"]
   },
+  "exaApiKey": "!$HOME/.pi/agent/scripts/get-secret.sh EXA_API_KEY",
   "tinyfishApiKey": "!$HOME/.pi/agent/scripts/get-secret.sh TINYFISH_API_KEY",
   "firecrawlApiKey": "!$HOME/.pi/agent/scripts/get-secret.sh FIRECRAWL_API_KEY"
 }
@@ -386,6 +450,8 @@ node tests/test-skill-highlight.mjs
 node tests/test-skill-invoke-chip.mjs
 node tests/test-skill-transcript-badge.mjs
 node tests/test-transcript-summary-cards.mjs
+node tests/test-account-pool.mjs
+node tests/test-rewind.mjs
 ```
 
 Verify the search and package templates without credentials or network calls:
