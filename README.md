@@ -274,170 +274,17 @@ Adds `/custom-footer` and `/builtin-footer` to switch at
 runtime. The compact footer hides the built-in cwd, usage/cost totals, and other
 extension statuses; `/builtin-footer` restores them.
 
-**`compact-tools.ts`** — displays each tool call as one truncated line by default:
-
-```text
-▸ read extensions/custom-footer.ts
-▸ bash npm test
-```
-
-Adjacent collapsed tool calls sit back-to-back without blank lines. User
-messages get a one-cell accent rule (`▎`, left quarter block) on every rendered
-row — including the blank padding rows — so the rule spans the whole block
-instead of stopping at the text line. The glyph is one cell tall, which is the
-full line height; a cell-fill was rejected because a background always covers a
-whole cell and read as a heavy stripe. The rule is repainted from the
-original render on reload, so a session that loaded an older rule glyph collapses
-back to one bar instead of stacking them.
-In fullscreen mode, click the tool header after a result arrives to expand it;
-click again to collapse it. `Ctrl+O` expands/collapses all tools and also works
-in regular terminal mode. Expanded output uses one padded `Box` layout with a
-neutral tint blended at 30% over Pi's reported terminal background (ANSI has no
-actual alpha channel). Edge-aligned `▕`/`▏` sides and native ANSI overline
-rules on spaces meet the filled interior without tinting the border cells.
-The heading stays unshaded and merges tool details (such as `read` line ranges)
-to avoid duplicate title rows. Headings and border cells keep the terminal
-background, so the tint stays inside the frame. Native background layers are
-flattened into this one surface; foreground syntax/diff colors remain
-unchanged. Collapsed and result-less calls keep the terminal background.
-Expanded calls reuse the original built-in or plugin renderers, including edit
-diffs and write contents. Unknown tools fall back to
-plain arguments/output. Collapsed errors are marked, and streaming calls remain
-compact. This changes presentation only, not tool execution or model-visible
-results. Pi's native inline image panels are outside the renderer and can still
-appear when image display is enabled. Disable this extension through `pi config`
-and `/reload` to restore the normal preview layout.
-
-**`code-block.ts`** — gives assistant code fences and expanded `read`, `bash`,
-`write`, and `edit` output an edge-aligned frame with language, status, and copy
-action on the top stroke, with a subtle 15% interior tint and no outer tinting.
-The top stroke is drawn with `─` rule glyphs on the frame's first row, so the
-language, status, and copy labels share its baseline:
-
-```text
-▕─ typescript ────────────────────────────── ✓ Complete  [Copy] ─▏
-```
-
-The bottom cap stays an ANSI overline row so it lands exactly on the seam under
-the last body row. No line numbers are added; edit diffs also omit Pi's line-number gutter while
-keeping change markers and colors. File paths are hidden in code-block headers
-by default (the tool summary still shows its arguments).
-
-- Click `[Copy]` in fullscreen mode, or use `/code-copy` to select a block from
-  the current session branch with the keyboard. Copy excludes the frame and
-  preserves source tabs. Edit copy returns a number-free diff with `+`/`-` markers.
-- Run `/codeblock-path on` or `/codeblock-path off` for the current session.
-  Start Pi with `--code-block-path` to show paths from startup.
-- Assistant headers only show a path explicitly supplied as `path=...` in the
-  fence info; they do not infer filenames from code.
-
-Tool rendering uses the public extension API through `compact-tools.ts`.
-Assistant rendering needs a guarded adapter for Pi 1.0.4's internal Markdown
-renderer because Pi has no public code-block component hook. Unknown renderer
-shapes keep native message rendering and show a warning. Nested list/blockquote
-fences, user messages, and thinking blocks retain native rendering. Mermaid
-continues through Pi's own Markdown transformer. The adapter is TUI-only and
-restores the original methods on reload/shutdown. Very narrow panels omit the
-frame/copy action; `/code-copy` remains available. Disable `code-block.ts` and
-reload to restore native code presentation.
-
 **`dollar-skill.ts`** — types `$skill-name` and rewrites it to
 `/skill:skill-name` on submit, plus `$`-triggered autocomplete over installed
 skills. Also supports multi-skill pipeline chains such as `$think -> $work`
 or `$think ➔ $work`, combining stages sequentially into a single pipeline prompt.
 
-**`skill-highlight-editor.ts`** — draws known `/skill:<name>` invocations as a
-bold `💡 name` chip after the stock editor lays out the prompt: `syntaxVariable`
-fills the chip and `customMessageBg` becomes the ink, so it matches the transcript
-badge. The submitted text is unchanged. Four unpainted spaces preserve each
-canonical token's original footprint, so following text and the caret keep their
-columns. While editing inside a token (including its first character), it stays
-literal and highlighted. `$<name>` aliases stay literal because the bulb chip
-would be wider than the alias. Names resolve against the real skill registry;
-unknown names are not painted. Pi's zero-width private markers (`\x1b_pi:c`,
-`\x1b_pi:fc`, `\x1b_pi:/fc`) are treated as escapes, so a token the cursor sits
-inside is still recognised and painted.
-
-The same editor replaces Pi's simulated block cursor with a **steady vertical
-beam** using the terminal's native cursor (DECSCUSR). It preserves Pi's zero-width
-cursor marker and lets the TUI handle placement and focus, including IME and
-fullscreen/regular mode. The fake-cursor cell is hidden in both spellings: Pi 1.3's
-`\x1b_pi:fc...\x1b_pi:/fc` region and the older `\x1b[7m` inverse video. A focused editor renews native cursor visibility if
-Pi reapplies persisted settings after `/reload`; an inactive or released editor
-does not. No settings file or upstream Pi patch is needed. On reload/exit it
-restores the prior hardware-cursor visibility and requests the
-terminal's default cursor shape. If the runtime APIs are unavailable, it keeps
-the stock block. The terminal must support DECSCUSR to display the beam.
-
-This replaces the editor component and passes `embedWorkingStatus` through to
-keep the working indicator in the editor's top border. Highlighting failures
-fall back to the stock text; cursor handling works independently of the theme.
-Tests verify row geometry, cursor cells, focus and cleanup against real Pi TUI
-classes. Wrapped tokens without a complete match stay literal.
-
-**`skill-invoke-chip.ts`** — shows a skill invocation banner above the editor
-whenever the prompt holds a skill invocation:
-
-```text
-💡 git · check · think +2 | SWE-2 · max
-```
-
-A teal `💡` invocation marker, skill names in the label colour capped at three
-with a `+N` overflow, then a dim `|` and the live session state (model ·
-thinking level, falling back to the configured defaults). Everything sits on the
-`customMessageBg` surface Pi already gives the `[skill]` block, so the inline
-prompt and the transcript read as one idea rather than two visual languages.
-
-This is the public-API companion to `skill-highlight-editor.ts`. It cannot paint
-inline text, but it replaces no editor and does no ANSI work, so it keeps working
-regardless of how the editor is implemented. It recognises both `/skill:<name>`
-and the `$<name>` alias, and only rewrites the widget when the chip actually
-changes — widget writes re-render the transcript. Use either extension or both;
-they do not conflict.
-
-**`skill-transcript-badge.ts`** — replaces Pi's stock `[skill]` message box with a
-compact invocation header, without full-width divider rules or frames:
-
-```text
-▸ 💡 SKILL  think · ≈3.8k tokens
-```
-
-The header is a filled chip with the colors inverted: `syntaxVariable` fills the
-whole row and `customMessageBg` is the ink, so the label and the skill name keep
-their weight through bold rather than a second hue. Collapsed messages occupy one row; narrow terminals omit token
-metadata before truncating the name. Token counts are estimates based on content length.
-
-Mouse click or `Ctrl+O` expands the message without adding a border:
-
-```text
-▾ 💡 SKILL  think · ≈3.8k tokens
-  ~/.agents/skills/think/SKILL.md · 142 lines
-
-  Skill instructions rendered as Markdown…
-```
-
-Location and line count are dim and visible only when expanded. Pipelines use
-`▸ 💡 PIPELINE  think ➔ work · ≈3.8k tokens`, preserving the label when expanded.
-Run `/reload` after updating the extension; the renderer hook is replaced rather
-than retaining an older installed version.
-
-**`transcript-summary-cards.ts`** — redesigns Pi's stock `[compaction]` and `[branch]`
-message blocks. Eliminates the bulky filled purple box and replaces it with a clean 1-line flat
-divider bar on `customMessageBg` when collapsed, and a structured card with **border-mounted
-top-left titles** (`╭─ 🗜️ Context Compaction ──...─╮` / `╭─ 🌿 Branch Handoff ──...─╮`)
-when expanded:
-
-```text
-╭─ 🗜️ Context Compaction ────────────────────────────────────────── [▴ collapse] ─╮
-│ 📦 Compacted from 168,400 tokens · context refreshed                             │
-├──────────────────────────────────────────────────────────────────────────────────┤
-│ Explored and implemented transcript UI components...                             │
-╰──────────────────────────────────────────────────────────────────────────────────╯
-```
-
-These extensions are plain TypeScript and are loaded directly from
-`~/.pi/agent/extensions/`. The header, footer, and initial tool-folding state
-activate automatically in TUI mode; no extra package or installer change is needed.
+These four extensions are plain TypeScript, loaded directly from
+`~/.pi/agent/extensions/`; the header and footer activate automatically in TUI mode.
+Tool rendering, code fences, skill chips, and summary cards are back to Pi's stock
+presentation — the custom versions were removed on 2026-10-21 and survive only in git
+history. Disable any file through `pi config` (or delete it) and `/reload` to change
+the look.
 
 ### Verify the statusline
 
@@ -445,12 +292,6 @@ With Pi installed, run from the repository root:
 
 ```bash
 node tests/test-custom-footer.mjs
-node tests/test-compact-tools.mjs
-node tests/test-code-block.mjs
-node tests/test-skill-highlight.mjs
-node tests/test-skill-invoke-chip.mjs
-node tests/test-skill-transcript-badge.mjs
-node tests/test-transcript-summary-cards.mjs
 node tests/test-account-pool.mjs
 node tests/test-rewind.mjs
 ```
@@ -520,29 +361,21 @@ pi-setup/
 │   ├── settings.json
 │   └── web-search.example.json
 ├── extensions/
-│   ├── code-block.ts
-│   ├── compact-tools.ts
+│   ├── account-pool/          # /pool
 │   ├── custom-banner.ts
 │   ├── custom-footer.ts
 │   ├── dollar-skill.ts
-│   ├── skill-highlight-editor.ts
-│   ├── skill-invoke-chip.ts
-│   ├── skill-transcript-badge.ts
-│   └── transcript-summary-cards.ts
+│   └── rewind/                # /rewind
 ├── scripts/
 │   ├── get-secret.sh
 │   └── test-custom-footer.mjs
 ├── setup/
 │   └── install.sh
 └── tests/
-    ├── test-code-block.mjs
-    ├── test-compact-tools.mjs
+    ├── test-account-pool.mjs
     ├── test-custom-footer.mjs
     ├── test-package-selection.mjs
-    ├── test-skill-highlight.mjs
-    ├── test-skill-invoke-chip.mjs
-    ├── test-skill-transcript-badge.mjs
-    ├── test-transcript-summary-cards.mjs
+    ├── test-rewind.mjs
     └── test-web-search-config.mjs
 ```
 
