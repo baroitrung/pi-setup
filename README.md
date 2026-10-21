@@ -311,8 +311,8 @@ After installing, run `/reload` in Pi to check both components visually.
 
 ## Packages
 
-`config/settings.json` lists the eight packages this setup keeps. The list was cut
-on 2026-10-21 after measuring real usage across 158 sessions rather than guessing:
+`config/settings.json` lists the packages this setup keeps. Eight were measured
+against 158 sessions of real tool usage; two more are on trial (marked below):
 
 | Package | Why it stays |
 | :--- | :--- |
@@ -324,6 +324,8 @@ on 2026-10-21 after measuring real usage across 158 sessions rather than guessin
 | `pi-lsp-extension@1.4.0` | `lsp_diagnostics` (151 calls), `code_overview`, `ast_search` |
 | `pi-subagents@0.77.0` | `subagent`, `bg_wait`, FleetView |
 | `@narumitw/pi-goal` | `goal_*` tools and `/goal` |
+| `pi-lens` *(trial)* | post-edit LSP/lint/format feedback; Java support needs `scripts/install-java-lsp.sh` |
+| `context-mode` *(trial)* | tool-output sandboxing + SQLite memory; overlaps `/rewind` and `pi-memory` |
 
 Dropped, and why they should not come back without a measurement:
 
@@ -339,7 +341,34 @@ not carry yet. LSP servers are installed separately (`typescript-language-server
 plus `typescript` for JS/TS, `jdtls` for Java); without one, the tools fall back to
 tree-sitter analysis, which is not type checking.
 
+Two of these are on trial, and the overlap is real: `pi-lens` spawns its own LSP
+clients (so it duplicates `pi-lsp-extension`), and `context-mode` rewrites tool output
+and context (so it duplicates `/rewind` and `pi-memory`). Keep one per job once a real
+session shows which side wins.
+
 Restart Pi or run `/reload` after changing the package selection.
+
+### Java language support (pi-lens)
+
+`scripts/install-java-lsp.sh` puts Eclipse JDT LS, `google-java-format`, and the
+Lombok agent on the machine. It matters because the versions are not interchangeable:
+JDT LS 1.64 bundles declare `osgi.ee JavaSE 25`, and with Java 21 the server exits 13
+with an OSGi resolution log. The script installs Java 25 **side by side**, leaving the
+project JDK pinned by mise (corretto-17) untouched, and only `jdtls` uses it.
+
+```bash
+bash scripts/install-java-lsp.sh     # idempotent; --force re-downloads
+```
+
+Layout: `~/.local/share/jdtls`, `~/.local/share/google-java-format/gjf.jar`,
+`~/.local/share/lombok/lombok.jar`, wrappers in `~/.local/bin/{jdtls,google-java-format}`.
+`pi-lens` finds the server as `$JDTLS_PATH || "jdtls"`, so PATH is enough. Lombok needs
+`PI_LENS_LOMBOK_JAR` in the shell (added to `~/.zshrc`), and is only applied when a
+project actually uses Lombok — pi-lens then boots JDT LS with `-javaagent:lombok.jar`.
+
+Verified without a Pi session: JDT LS answered `initialize` and returned a real
+diagnostic (`Type mismatch: cannot convert from String to int`) for a probe file, and
+`google-java-format` formatted it. In Pi, `/lens-health` shows the LSP pool.
 
 ### Parallel subagents and goals
 
@@ -368,6 +397,7 @@ pi-setup/
 │   └── rewind/                # /rewind
 ├── scripts/
 │   ├── get-secret.sh
+│   ├── install-java-lsp.sh
 │   └── test-custom-footer.mjs
 ├── setup/
 │   └── install.sh

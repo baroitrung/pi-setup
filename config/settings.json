@@ -15,7 +15,9 @@
     "npm:pi-lsp-extension@1.4.0",
     "npm:pi-memory",
     "npm:pi-subagents@0.77.0",
-    "npm:@narumitw/pi-goal"
+    "npm:@narumitw/pi-goal",
+    "npm:pi-lens",
+    "npm:context-mode"
   ],
   "terminal": {
     "imageWidthCells": 60

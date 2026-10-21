@@ -24,8 +24,12 @@ const expected = [
 	"npm:pi-memory",
 	"npm:pi-subagents@0.77.0",
 	"npm:@narumitw/pi-goal",
+	// Under evaluation (2026-10-21): pi-lens for post-edit diagnostics,
+	// context-mode for tool-output sandboxing. Neither has proven itself yet.
+	"npm:pi-lens",
+	"npm:context-mode",
 ];
-assert.deepEqual([...sources].sort(), [...expected].sort(), "the package list is exactly the minimal set");
+assert.deepEqual([...sources].sort(), [...expected].sort(), "the package list is exactly the tracked set");
 
 // Each of these was removed on 2026-10-21 after measuring real tool usage: browser-use
 // alone contributed 34 of 71 tools for 23 lifetime calls.
