@@ -55,6 +55,18 @@ backup() {
   yellow "    backed up: ${target/#$HOME/\~}"
 }
 
+# Back up a directory extension OUTSIDE $PI_DIR/extensions: Pi loads any
+# subdirectory that contains an index.ts, so a sibling `<name>.backup.<ts>/`
+# would register a second copy of the extension's commands and hooks.
+backup_tree() {
+  local target="$1" dest
+  [ -e "$target" ] || return 0
+  dest="$PI_DIR/backups/extensions/$(basename "$target").${TIMESTAMP}"
+  run mkdir -p "$(dirname "$dest")"
+  run cp -a "$target" "$dest"
+  yellow "    backed up: ${dest/#$HOME/\~}"
+}
+
 # Copy src → dest only when contents differ; back up dest first.
 sync_file() {
   local src="$1" dest="$2" mode="${3:-}"
@@ -68,6 +80,22 @@ sync_file() {
   run cp "$src" "$dest"
   [ -n "$mode" ] && run chmod "$mode" "$dest"
   green "  ✓ ${dest/#$HOME/\~}"
+  return 0
+}
+
+# Copy a directory of extension sources (index.ts + lib/*.ts) as one unit.
+# Pi loads a directory as a single extension; the whole tree must match.
+sync_tree() {
+  local src="$1" dest="$2"
+  [ -d "$src" ] || return 0
+  if [ -d "$dest" ] && diff -r -q "$src" "$dest" >/dev/null 2>&1; then
+    dim "    unchanged: ${dest/#$HOME/\~}/"
+    return 0
+  fi
+  backup_tree "$dest"
+  run mkdir -p "$dest"
+  run cp -a "$src/." "$dest/"
+  green "  ✓ ${dest/#$HOME/\~}/"
   return 0
 }
 
@@ -94,6 +122,12 @@ echo ""
 echo "Extensions"
 for f in "$REPO_DIR/extensions/"*.ts; do
   sync_file "$f" "$PI_DIR/extensions/$(basename "$f")"
+done
+# Multi-file extensions are directories with an index.ts entry point.
+for d in "$REPO_DIR/extensions/"*/; do
+  [ -f "${d}index.ts" ] || continue
+  name="$(basename "$d")"
+  sync_tree "$d" "$PI_DIR/extensions/$name"
 done
 # quotas.json belongs to the @latentminds/pi-quotas package but lives in extensions/
 sync_file "$REPO_DIR/config/quotas.json" "$PI_DIR/extensions/quotas.json"
