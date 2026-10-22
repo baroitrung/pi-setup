@@ -1,10 +1,15 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { CustomEditor } from "@earendil-works/pi-coding-agent";
 import { sliceByColumn, visibleWidth } from "@earendil-works/pi-tui";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 
-// pi-pretty's claudecode tool style gives the input box plain rules instead of a
-// rounded frame (`createPromptEditorClass(..., !claudeStyle)` → boxed = false).
-// This puts the corners back without touching pi-pretty: it wraps whatever editor
-// factory is installed and rounds the border lines it produces.
+// pi-pretty's claudecode tool style installs its prompt editor with `boxed = false`,
+// which drops the rounded frame (plain rules) and keeps `❯` flush left. This rebuilds
+// the same editor class with `boxed = true`: corners, the author's inner padding, and
+// the prompt sitting inside the box. If pi-pretty's module cannot be loaded, it falls
+// back to post-processing the border lines of whatever factory is installed.
 
 type EditorLike = {
 	borderColor?: (text: string) => string;
@@ -22,37 +27,70 @@ type EditorUI = {
 const TOP = ["╭", "╮"] as const;
 const BOTTOM = ["╰", "╯"] as const;
 
-// Factories we produced. A WeakSet keeps us from mutating a factory we do not own
-// (a frozen object would throw on a property assignment). A reload starts with an
-// empty set, which costs at most one harmless re-wrap.
+// Factories we produced. A WeakSet keeps us from touching a factory we do not own.
 const ours = new WeakSet<EditorFactory>();
-
-/** The factory to return to on `/input-border off`; always the latest foreign one. */
 let baseline: EditorFactory | undefined;
-/** Owner intent. Kept separate from install state so "off" cannot be undone by a later turn. */
+/** Owner intent; kept apart from install state so "off" cannot be undone by a turn. */
 let enabled = true;
+let boxedFactory: EditorFactory | undefined;
+let boxedFactoryResolved = false;
 
 function editorUI(ctx: ExtensionContext): EditorUI {
 	return ctx.ui as unknown as EditorUI;
 }
 
+const PROMPT_EDITOR_ENTRY = join(
+	homedir(), ".pi", "agent", "npm", "node_modules",
+	"@heyhuynhgiabuu", "pi-pretty", "dist", "prompt-editor.js",
+);
+
+/**
+ * The same editor pi-pretty builds, but boxed. Returns undefined when the package
+ * (or its internal shape) is not what we expect — the caller then falls back.
+ */
+async function resolveBoxedFactory(ctx: ExtensionContext): Promise<EditorFactory | undefined> {
+	if (boxedFactoryResolved) return boxedFactory;
+	boxedFactoryResolved = true;
+	try {
+		const mod = (await import(pathToFileURL(PROMPT_EDITOR_ENTRY).href)) as {
+			createPromptEditorClass?: (base: unknown, paintIcon: (icon: string) => string, boxed: boolean) => new (...args: unknown[]) => EditorLike;
+		};
+		if (typeof mod.createPromptEditorClass !== "function") return undefined;
+		const theme = (ctx.ui as unknown as { theme?: { getThinkingBorderColor?: (level: string) => (icon: string) => string; fg?: (token: string, text: string) => string } }).theme;
+		const level = (ctx as unknown as { thinkingLevel?: string }).thinkingLevel ?? "off";
+		const paintIcon = (icon: string): string => {
+			try {
+				if (theme && typeof theme.getThinkingBorderColor === "function") return theme.getThinkingBorderColor(level)(icon);
+				if (theme && typeof theme.fg === "function") return theme.fg("thinkingText", icon);
+			} catch {
+				// Fall through to the uncoloured icon.
+			}
+			return icon;
+		};
+		const PromptEditor = mod.createPromptEditorClass(CustomEditor, paintIcon, true);
+		boxedFactory = ((...args: unknown[]) => new PromptEditor(...args)) as EditorFactory;
+		ours.add(boxedFactory);
+		return boxedFactory;
+	} catch {
+		return undefined;
+	}
+}
+
 function round(editor: EditorLike, line: unknown, width: number, left: string, right: string): string {
 	if (typeof line !== "string") return "";
 	if (width < 2) return line;
-	// Only touch lines the editor actually drew at full width; a short line means the
-	// host is hiding the border itself, and corners would be a lie.
 	if (visibleWidth(line) !== width) return line;
 	const paint = typeof editor.borderColor === "function" ? (text: string) => editor.borderColor!(text) : (text: string) => text;
 	return `${paint(left)}${sliceByColumn(line, 1, width - 2, true)}${paint(right)}`;
 }
 
+/** Fallback: keep the installed editor, decorate the two border lines. */
 function wrapFactory(current: EditorFactory): EditorFactory {
 	const wrapped: EditorFactory = (...args) => {
 		const editor = current(...args);
 		const top = editor.renderTopBorder?.bind(editor);
 		const bottom = editor.renderBottomBorder?.bind(editor);
 		if (typeof top !== "function" || typeof bottom !== "function") return editor;
-
 		editor.renderTopBorder = (width, hidden) => round(editor, top(width, hidden), width, TOP[0], TOP[1]);
 		editor.renderBottomBorder = (width, hidden) => round(editor, bottom(width, hidden), width, BOTTOM[0], BOTTOM[1]);
 		return editor;
@@ -61,34 +99,37 @@ function wrapFactory(current: EditorFactory): EditorFactory {
 	return wrapped;
 }
 
-type EnsureResult = "wrapped" | "already" | "unsupported";
+type EnsureResult = "boxed" | "rounded" | "already" | "unsupported";
 
-/** Wrap the current factory. Safe to call every turn: it is a WeakSet hit when done. */
-function ensure(ctx: ExtensionContext): EnsureResult {
+async function ensure(ctx: ExtensionContext): Promise<EnsureResult> {
 	if (ctx.mode !== "tui") return "unsupported";
 	try {
 		const ui = editorUI(ctx);
 		if (typeof ui.getEditorComponent !== "function" || typeof ui.setEditorComponent !== "function") return "unsupported";
 		const current = ui.getEditorComponent();
+		if (current && ours.has(current)) return "already";
+		if (current) baseline = current;
+
+		const boxed = await resolveBoxedFactory(ctx);
+		if (boxed) {
+			ui.setEditorComponent(boxed);
+			return "boxed";
+		}
 		if (!current) return "unsupported";
-		if (ours.has(current)) return "already";
-		baseline = current;
 		ui.setEditorComponent(wrapFactory(current));
-		return "wrapped";
+		return "rounded";
 	} catch {
 		return "unsupported";
 	}
 }
 
-/** Put the host factory back. Reports whether there was anything to undo. */
 function restore(ctx: ExtensionContext): boolean {
 	if (ctx.mode !== "tui") return false;
 	try {
 		const ui = editorUI(ctx);
 		if (typeof ui.setEditorComponent !== "function") return false;
 		const current = typeof ui.getEditorComponent === "function" ? ui.getEditorComponent() : undefined;
-		// Someone installed a new factory after our last wrap: adopt it as the baseline
-		// instead of clobbering it with a stale one, and report nothing left to undo.
+		// A newer foreign factory appeared after our wrap: adopt it, do not clobber it.
 		if (current && !ours.has(current)) {
 			baseline = current;
 			return false;
@@ -104,31 +145,28 @@ function restore(ctx: ExtensionContext): boolean {
 
 export default function (pi: ExtensionAPI) {
 	// pi-pretty installs its prompt editor in its own session_start handler and
-	// extension order is not guaranteed, so retry briefly: whichever side lands last,
-	// `ensure` is idempotent and `agent_start` keeps the wrapper attached afterwards.
+	// extension order is not guaranteed, so retry briefly; `ensure` is idempotent and
+	// `agent_start` keeps our factory attached if theirs lands later.
 	const scheduleRetries = (ctx: ExtensionContext): void => {
-		ensure(ctx);
+		void ensure(ctx);
 		for (const delay of [50, 200, 600, 1500]) {
 			const timer = setTimeout(() => {
-				if (enabled) ensure(ctx);
+				if (enabled) void ensure(ctx);
 			}, delay);
 			if (typeof timer.unref === "function") timer.unref();
 		}
 	};
 
 	pi.on("session_start", async (_event, ctx) => {
-		if (!enabled) return;
-		scheduleRetries(ctx);
+		if (enabled) scheduleRetries(ctx);
 	});
 
-	// A replacement factory is only detected here, so this runs unconditionally while
-	// the owner wants the border — not just until the first successful wrap.
 	pi.on("agent_start", async (_event, ctx) => {
-		if (enabled) ensure(ctx);
+		if (enabled) await ensure(ctx);
 	});
 
 	pi.registerCommand("input-border", {
-		description: "Rounded input border on top of pi-pretty's claudecode style (on|off)",
+		description: "Boxed input with the prompt inside, on top of pi-pretty's claudecode style (on|off)",
 		handler: async (args, ctx) => {
 			if (ctx.mode !== "tui") return;
 			const action = args.trim().toLowerCase();
@@ -136,15 +174,16 @@ export default function (pi: ExtensionAPI) {
 			if (action === "off") {
 				enabled = false;
 				const undone = restore(ctx);
-				ctx.ui.notify(undone ? "Input border back to pi-pretty's plain rules" : "Nothing to undo: the border is not wrapped", undone ? "info" : "warning");
+				ctx.ui.notify(undone ? "Input box back to pi-pretty's plain rules" : "Nothing to undo: the box is not ours", undone ? "info" : "warning");
 				return;
 			}
 
 			if (action === "on") {
 				enabled = true;
-				const result = ensure(ctx);
-				if (result === "unsupported") ctx.ui.notify("No editor factory to wrap yet — try again after the editor is installed", "warning");
-				else ctx.ui.notify(result === "wrapped" ? "Rounded input border installed" : "Rounded input border already active", "info");
+				const result = await ensure(ctx);
+				if (result === "unsupported") ctx.ui.notify("No editor factory to take over yet — try again once the editor exists", "warning");
+				else if (result === "boxed") ctx.ui.notify("Boxed input installed: frame with the prompt inside", "info");
+				else ctx.ui.notify("Frame drawn, but pi-pretty's module was not loadable — prompt stays flush left", "warning");
 				return;
 			}
 

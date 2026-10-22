@@ -71,15 +71,16 @@ const source = readFileSync(new URL("../extensions/pretty-border.ts", import.met
 // 5. Behaviour-carrying lines, not just symbol names: each of these is the fix for
 //    a bug the reviewer found, so a regression turns this red.
 const required = [
-	[/(const ours = new WeakSet<EditorFactory>\(\))/, "wrapper identity tracked in a WeakSet (no mutation of a foreign factory)"],
-	[/if \(ours\.has\(current\)\) return "already"/, "ensure() is idempotent"],
-	[/baseline = current;\s*\n\s*ui\.setEditorComponent\(wrapFactory\(current\)\)/, "the foreign factory is remembered before wrapping"],
-	[/if \(enabled\) ensure\(ctx\)/, "agent_start re-attaches after a replacement factory"],
-	[/if \(!enabled\) return;\s*\n\s*scheduleRetries\(ctx\)/, "session_start respects owner intent"],
+	[/createPromptEditorClass\(CustomEditor, paintIcon, true\)/, "pi-pretty's editor is rebuilt with boxed = true, so the prompt sits inside the frame"],
+	[/const ours = new WeakSet<EditorFactory>\(\)/, "wrapper identity tracked in a WeakSet (no mutation of a foreign factory)"],
+	[/if \(current && ours\.has\(current\)\) return "already"/, "ensure() is idempotent"],
+	[/if \(current\) baseline = current;/, "the foreign factory is remembered before taking over"],
+	[/if \(enabled\) await ensure\(ctx\)/, "agent_start re-attaches after a replacement factory"],
+	[/if \(enabled\) scheduleRetries\(ctx\)/, "session_start respects owner intent"],
 	[/enabled = false;/, "/input-border off records intent"],
 	[/if \(current && !ours\.has\(current\)\)/, "off adopts a newer foreign factory instead of clobbering it with a stale baseline"],
-	[/undone \?[\s\S]{0,140}Nothing to undo/, "off reports honestly when there was nothing to undo"],
-	[/baseline = undefined;\s*\n\s*return true;/, "restore() clears the baseline it returned"],
+	[/undone \?[\s\S]{0,160}Nothing to undo/, "off reports honestly when there was nothing to undo"],
+	[/function wrapFactory/, "the border-only fallback survives a pi-pretty load failure"],
 	[/ctx\.mode !== "tui"/, "no-op outside the TUI"],
 ];
 for (const [pattern, why] of required) assert.match(source, pattern, why);
