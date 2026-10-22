@@ -89,7 +89,8 @@ installed packages on the machine (`@narumitw/pi-goal`, `pi-subagents@0.77.0`) a
 into the template. `pi-pigment` was added to the template on 2026-10-21 and reverted on
 2026-10-22: it was never installed on the machine, so the template only carried drift.
 `pi-lens` was dropped on 2026-10-22: too heavy for how little it was used, and it
-duplicated `pi-lsp-extension` with a second LSP client pool. The default model is
+duplicated `pi-lsp-extension` with a second LSP client pool. `@heyhuynhgiabuu/pi-pretty`
+was installed the same day by choice and is synced here too. The default model is
 `opencode-go/deepseek-v4.1-flash` with high
 thinking; `config/models.json` adds the session-affinity compat overrides that keep that
 proxy channel on one backend (credentials stay in `auth.json`).
@@ -323,8 +324,10 @@ These four extensions are plain TypeScript, loaded directly from
 `~/.pi/agent/extensions/`; the header and footer activate automatically in TUI mode.
 Tool rendering, code fences, skill chips, and summary cards are back to Pi's stock
 presentation — the custom versions were removed on 2026-10-21 and survive only in git
-history. The tool renderers stay stock too: `pi-pigment` decorates the same eight built-in
-renderers through `registerToolRenderer`, so it was reverted the same way on 2026-10-22.
+history. The tool renderers stay stock from this repository's side: `pi-pigment` decorates
+the same eight built-in renderers through `registerToolRenderer`, so it was reverted on
+2026-10-22. The one rendering package this setup carries instead is
+`@heyhuynhgiabuu/pi-pretty` (see below), which owns neither the header nor the footer.
 Disable any file through `pi config` (or delete it) and `/reload` to change
 the look.
 
@@ -354,7 +357,8 @@ After installing, run `/reload` in Pi to check both components visually.
 ## Packages
 
 `config/settings.json` lists the packages this setup keeps. Eight were measured
-against 158 sessions of real tool usage; one more is on trial (marked below):
+against 158 sessions of real tool usage; `context-mode` is still on trial and
+`@heyhuynhgiabuu/pi-pretty` was added by choice on 2026-10-22 (both marked below):
 
 | Package | Why it stays |
 | :--- | :--- |
@@ -367,6 +371,7 @@ against 158 sessions of real tool usage; one more is on trial (marked below):
 | `pi-subagents@0.77.0` | `subagent`, `bg_wait`, FleetView |
 | `@narumitw/pi-goal` | `goal_*` tools and `/goal` |
 | `context-mode` *(trial)* | tool-output sandboxing + SQLite memory; overlaps `/rewind` and `pi-memory` |
+| `@heyhuynhgiabuu/pi-pretty` | message and tool rendering (see below); re-registers `read`/`edit`, owns no header or footer |
 
 Dropped, and why they should not come back without a measurement:
 
@@ -391,6 +396,29 @@ context, so it duplicates `/rewind` and `pi-memory`. Keep one per job once a rea
 shows which side wins. `pi-lens` already lost that bet and was dropped.
 
 Restart Pi or run `/reload` after changing the package selection.
+
+### Message and tool rendering (pi-pretty)
+
+`@heyhuynhgiabuu/pi-pretty` styles what the TUI prints: an `❯` marker on user messages, a
+syntax-highlighted `read` preview, and re-registered `read`/`edit` tool rows. It hooks
+internal surfaces — a markdown transformer plus patches to Pi's `AssistantMessageComponent`
+and `ToolExecutionComponent` — and every patch installs inside `session_start` behind
+`ctx.mode === "tui"`, so `pi -p`, RPC and `--export` are unaffected.
+
+Config lives in `~/.pi/agent/pi-pretty.json` (`PRETTY_*` environment variables win over it):
+
+```json
+{ "icons": "none", "theme": "github-dark", "toolStyle": "default" }
+```
+
+`icons: "nerd"` is the default and needs a Nerd Font; `none` falls back to plain ASCII.
+`theme` only drives the `read` preview — `settings.json`'s `theme: "system"` is not a Shiki
+name, so the default `github-dark` applies. Diffs are **not** covered: that needs the
+companion `@heyhuynhgiabuu/pi-diff`. It owns neither the header nor the footer, so
+`custom-banner.ts` and `custom-footer.ts` keep their jobs, and its editor extends Pi's
+`CustomEditor`, which keeps `dollar-skill.ts`'s `$skill` autocomplete.
+
+Remove it with `pi remove npm:@heyhuynhgiabuu/pi-pretty` and drop the template entry.
 
 ### Parallel subagents and goals
 
