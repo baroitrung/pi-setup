@@ -83,7 +83,12 @@ assert(!sources.some((source) => source.includes("mitsuhiko/agent-stuff") || sou
 // silently displace extensions/custom-footer.ts or bloat the tool schema.
 assert(!packageIds.some((id) => /powerline|slate|pi-coder|arnative|cc-extensions|footer/.test(id)),
 	"only custom-footer.ts owns the footer; no second footer/TUI suite may be installed");
-assert.equal(settings.theme, "system");
+assert.equal(settings.theme, "cyan", "custom cyan theme is selected");
+const cyanTheme = JSON.parse(readFileSync(
+	new URL("../themes/cyan.json", import.meta.url), "utf8",
+));
+assert.equal(cyanTheme.name, "cyan");
+assert.equal(cyanTheme.colors.accent, "cyan");
 // The cursor belongs to the terminal: Pi positions the hardware cursor (which also keeps
 // IME composition anchored) instead of hiding it and painting a reverse-video block.
 assert.equal(settings.showHardwareCursor, true,
