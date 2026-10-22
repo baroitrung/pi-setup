@@ -9,9 +9,6 @@ const settings = JSON.parse(readFileSync(
 const models = JSON.parse(readFileSync(
 	new URL("../config/models.json", import.meta.url), "utf8",
 ));
-const prettyConfig = JSON.parse(readFileSync(
-	new URL("../config/pi-pretty.json", import.meta.url), "utf8",
-));
 const sources = settings.packages.map((entry) => typeof entry === "string" ? entry : entry.source);
 const packageIds = sources.map((source) => source.startsWith("npm:")
 	? source.replace(/@[^@/]+$/, "") : source);
@@ -116,7 +113,5 @@ for (const [id, provider] of providers) {
 }
 assert(models.providers["opencode-go"]?.modelOverrides?.["deepseek-v4.1-flash"],
 	"the default model keeps its session-affinity override");
-assert.equal(prettyConfig.toolStyle, "claudecode", "pi-pretty uses claudecode style");
-assert.equal(prettyConfig.userRail, "#58a6ff", "pi-pretty preserves translucent blur via userRail");
 console.log("PASS: synced packages, standalone goal/subagents, opencode-go defaults, models.json compat, "
 	+ "browser autodetection, removed packages absent");

@@ -209,30 +209,7 @@ else
   dim "    unchanged: ${WS_DEST/#$HOME/\~} (not touching your live config)"
 fi
 
-# --- Step 7: pi-pretty.json --------------------------------------------------
-PRETTY_SRC="$REPO_DIR/config/pi-pretty.json"
-PRETTY_DEST="$PI_DIR/pi-pretty.json"
-if [ -f "$PRETTY_SRC" ]; then
-  if [ ! -e "$PRETTY_DEST" ]; then
-    sync_file "$PRETTY_SRC" "$PRETTY_DEST"
-  elif [ "$FORCE" = 1 ]; then
-    yellow "  pi-pretty.json: --force, overwriting"
-    sync_file "$PRETTY_SRC" "$PRETTY_DEST"
-  elif cmp -s "$PRETTY_SRC" "$PRETTY_DEST"; then
-    dim "    unchanged: ${PRETTY_DEST/#$HOME/\~}"
-  else
-    yellow ""
-    yellow "  ⚠  pi-pretty.json already exists — not overwriting."
-    yellow "     Review the diff and merge what you want:"
-    yellow ""
-    diff -u "$PRETTY_DEST" "$PRETTY_SRC" | sed 's/^/     /' || true
-    yellow ""
-    yellow "     Template: config/pi-pretty.json"
-    yellow "     Re-run with --force to overwrite (a backup is taken)."
-  fi
-fi
-
-# --- Step 8: verify ----------------------------------------------------------
+# --- Step 6: verify ----------------------------------------------------------
 echo ""
 echo "Verification"
 echo "------------"
@@ -243,7 +220,6 @@ echo "  agents/         : $(find "$PI_DIR/agents" -maxdepth 1 -name "*.md" 2>/de
 echo "  settings.json   : $([ -f "$SETTINGS_DEST" ] && echo present || echo MISSING)"
 echo "  models.json     : $([ -f "$MODELS_DEST" ] && echo present || echo MISSING)"
 echo "  web-search.json : $([ -f "$WS_DEST" ] && echo present || echo MISSING)"
-echo "  pi-pretty.json  : $([ -f "$PRETTY_DEST" ] && echo present || echo MISSING)"
 
 if [ "$DRY_RUN" = 1 ]; then
   echo ""
@@ -251,7 +227,7 @@ if [ "$DRY_RUN" = 1 ]; then
   exit 0
 fi
 
-# --- Step 9: version stamp ---------------------------------------------------
+# --- Step 8: version stamp ---------------------------------------------------
 if git -C "$REPO_DIR" rev-parse HEAD >/dev/null 2>&1; then
   REPO_REV="$(git -C "$REPO_DIR" rev-parse HEAD)"
   printf '%s\n' "$REPO_REV" > "$PI_DIR/.bootstrap-version"
