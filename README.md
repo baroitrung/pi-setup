@@ -22,7 +22,7 @@ bash setup/install.sh --dry-run
 
 | From | To | Notes |
 | :--- | :--- | :--- |
-| `extensions/*.ts` | `~/.pi/agent/extensions/` | Gradient banner, compact statusline/tool calls, `$skill` autocomplete, gradient working/thinking labels |
+| `extensions/*.ts` | `~/.pi/agent/extensions/` | Gradient banner, compact statusline/tool calls, `$skill` autocomplete |
 | `extensions/account-pool/` | `~/.pi/agent/extensions/account-pool/` | Multi-file extension: Antigravity account pool with per-model cooldown (`/pool`) |
 | `extensions/rewind/` | `~/.pi/agent/extensions/rewind/` | Multi-file extension: trim old tool results from the model context (`/rewind`) |
 | `scripts/get-secret.sh` | `~/.pi/agent/scripts/` | Reads one key from `~/.env`; mode `700` |
@@ -315,19 +315,6 @@ Adds `/custom-footer` and `/builtin-footer` to switch at
 runtime. The compact footer hides the built-in cwd, usage/cost totals, and other
 extension statuses; `/builtin-footer` restores them.
 
-**`gradient-working.ts`** — paints the animated loader labels with the same palette as
-the banner, so the spinner reads as part of the header instead of stock grey. Two moving
-parts:
-
-- the spinner glyphs, via `ctx.ui.setWorkingIndicator({ frames })` — custom frames are
-  rendered **verbatim**, so each frame carries its own truecolor escape;
-- the labels `Working…` and `Thinking…`, via `setWorkingMessage` / `setHiddenThinkingLabel`.
-  Pi styles those with `theme.fg("muted", …)`, which only *wraps* the string
-  (`` `${ansi}${text}\x1b[39m` ``), so per-glyph escapes inside survive and win.
-
-Pi resets the working message after every run, so the extension re-arms it on
-`agent_start`. `/gradient-working off` restores the theme colours without unloading it.
-
 **`dollar-skill.ts`** — types `$skill-name` and rewrites it to
 `/skill:skill-name` on submit, plus `$`-triggered autocomplete over installed
 skills. Also supports multi-skill pipeline chains such as `$think -> $work`
@@ -542,3 +529,30 @@ Then restore any `*.backup.<timestamp>` file you want back.
 ---
 
 from therealTINHTUTE with love
+
+## Working and thinking indicators
+
+`pi-pretty` owns both rows, so this repo does not fight it with an extension. An earlier
+`gradient-working.ts` called `ctx.ui.setWorkingIndicator({ frames })` with glyph-only
+frames; that displaced pi-pretty's frames, and because pi-pretty puts the **label inside
+its frames** (pi's own message is blank in that mode), the row lost the words `Working…`
+and kept only the icon.
+
+Colours now come from `~/.pi/agent/pi-pretty.json`, which is machine-local (it is not part
+of this template):
+
+```json
+{
+  "workingIndicator": {
+    "enabled": true, "text": ["Working…"], "mode": "shimmer",
+    "low": "#4d788e", "mid": "#60a5fa", "high": "#22d3ee",
+    "bold": true, "sessionAccent": false, "intervalMs": 33
+  },
+  "thinkingIndicator": { "enabled": true, "intervalMs": 33 }
+}
+```
+
+Three tiers, not five: pi-pretty sweeps `low → mid → high` across the text and paints the
+spinner in `low`, so a deep `#124b68` cannot be used there without making the glyph
+invisible. Setting `mid`/`high` also switches `tiersCustomized` on, which stops the
+per-session accent from overriding the palette.
