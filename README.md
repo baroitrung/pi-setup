@@ -30,6 +30,7 @@ bash setup/install.sh --dry-run
 | `config/settings.json` | `~/.pi/agent/settings.json` | Installed only if absent — otherwise diffed |
 | `config/models.json` | `~/.pi/agent/models.json` | Provider/model compat overrides; credentials stay in `auth.json` |
 | `config/web-search.example.json` | `~/.pi/agent/web-search.json` | Same rule; **this is an example, edit it** |
+| `config/pi-pretty.json` | `~/.pi/agent/pi-pretty.json` | Claude Code tool style + Ghostty translucent userRail |
 
 `install.sh` is idempotent. It copies a file only when the contents differ, and
 backs up anything it overwrites to `<file>.backup.<timestamp>`. A directory under
@@ -38,7 +39,7 @@ Pi loads a multi-file extension; its backup goes to
 `~/.pi/agent/backups/extensions/<name>.<timestamp>/` instead, since Pi would happily
 load a `<name>.backup.<timestamp>/` sibling as a second copy of the extension.
 
-Your live `settings.json`, `models.json`, and `web-search.json` are **never
+Your live `settings.json`, `models.json`, `pi-pretty.json`, and `web-search.json` are **never
 clobbered** on a re-run — the script prints a unified diff and leaves the decision
 to you. Pass `--force` to overwrite anyway (a backup is still taken).
 
@@ -415,8 +416,13 @@ and `ToolExecutionComponent` — and every patch installs inside `session_start`
 Config lives in `~/.pi/agent/pi-pretty.json` (`PRETTY_*` environment variables win over it):
 
 ```json
-{ "icons": "none", "theme": "github-dark", "toolStyle": "default" }
+{
+  "toolStyle": "claudecode",
+  "userRail": "#58a6ff"
+}
 ```
+
+`toolStyle: "claudecode"` folds consecutive tool calls into `Done (...)` / `Running (...)` groups with single-line summaries (`✓`/`·`/`✗`/`⊘`) and click/`Ctrl+O` expansion. `userRail` draws a one-cell tinted bar alongside user messages instead of an opaque full-width background, preserving Ghostty's background translucency and blur.
 
 `icons: "nerd"` is the default and needs a Nerd Font; `none` falls back to plain ASCII.
 `theme` only drives the `read` preview — `settings.json`'s `theme: "system"` is not a Shiki
@@ -470,6 +476,7 @@ come from pi-ai's client identity. No extension in this repo reads them.
 pi-setup/
 ├── config/
 │   ├── models.json
+│   ├── pi-pretty.json
 │   ├── settings.json
 │   └── web-search.example.json
 ├── extensions/
