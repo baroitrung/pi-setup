@@ -27,6 +27,11 @@ const expected = [
 	// On trial (2026-10-21): context-mode for tool-output sandboxing. It has not proven
 	// itself yet — see the dropped list below for what already lost that bet.
 	"npm:context-mode",
+	// Added 2026-10-22 by choice: pi-pretty is the one rendering package this setup
+	// carries. It adds no tool of its own (it re-registers read/edit) and owns neither
+	// ctx.ui.setHeader nor ctx.ui.setFooter, so custom-banner.ts and custom-footer.ts
+	// keep their jobs.
+	"npm:@heyhuynhgiabuu/pi-pretty",
 ];
 assert.deepEqual([...sources].sort(), [...expected].sort(), "the package list is exactly the tracked set");
 
