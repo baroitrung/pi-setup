@@ -5,8 +5,8 @@
 	"vars": {
 		"text": "okhsl(234 3% 89%)",
 		"muted": "okhsl(229 6% 67%)",
-		"cyan": "#22d3ee",
-		"cyanBorder": "#06b6d4",
+		"cyan": "#4d788e",
+		"cyanBorder": "#124b68",
 		"violet": "okhsl(295 50% 67%)",
 		"blue": "okhsl(232 54% 67%)",
 		"green": "okhsl(159 59% 67%)",
