@@ -14,6 +14,7 @@
 #   2b. Copies agents/     → ~/.pi/agent/agents/  (subagent profiles)
 #   3. Handles settings.json (install if new, otherwise show a diff)
 #   4. Handles models.json (provider/model compat overrides; same rule)
+#   4b. Handles pi-pretty.json (TUI renderer palette; same rule)
 #   5. Handles web-search.json from web-search.example.json (same rule)
 #   6. Verifies and prints the remaining manual steps
 
@@ -199,6 +200,30 @@ else
   yellow "     Re-run with --force to overwrite (a backup is taken)."
 fi
 
+# --- Step 5b: pi-pretty.json -------------------------------------------------
+# Renderer palette for the working/thinking rows. Never clobbered silently: the
+# live file is the one a person tunes.
+PRETTY_SRC="$REPO_DIR/config/pi-pretty.json"
+PRETTY_DEST="$PI_DIR/pi-pretty.json"
+if [ ! -e "$PRETTY_DEST" ]; then
+  sync_file "$PRETTY_SRC" "$PRETTY_DEST"
+elif [ "$FORCE" = 1 ]; then
+  yellow "  pi-pretty.json: --force, overwriting"
+  sync_file "$PRETTY_SRC" "$PRETTY_DEST"
+elif cmp -s "$PRETTY_SRC" "$PRETTY_DEST"; then
+  dim "    unchanged: ${PRETTY_DEST/#$HOME/\~}"
+else
+  yellow ""
+  yellow "  ⚠  pi-pretty.json already exists — not overwriting."
+  yellow "     Review the diff and merge what you want:"
+  yellow ""
+  diff -u "$PRETTY_DEST" "$PRETTY_SRC" | sed 's/^/     /' || true
+  yellow ""
+  yellow "     Template: config/pi-pretty.json"
+  yellow "     Live:     ${PRETTY_DEST/#$HOME/\~}"
+  yellow "     Re-run with --force to overwrite (a backup is taken)."
+fi
+
 # --- Step 6: web-search.json -------------------------------------------------
 WS_SRC="$REPO_DIR/config/web-search.example.json"
 WS_DEST="$PI_DIR/web-search.json"
@@ -227,6 +252,7 @@ echo "  agents/         : $(find "$PI_DIR/agents" -maxdepth 1 -name "*.md" 2>/de
 echo "  themes/         : $(find "$PI_DIR/themes" -maxdepth 1 -name "*.json" 2>/dev/null | wc -l | tr -d ' ') custom themes"
 echo "  settings.json   : $([ -f "$SETTINGS_DEST" ] && echo present || echo MISSING)"
 echo "  models.json     : $([ -f "$MODELS_DEST" ] && echo present || echo MISSING)"
+echo "  pi-pretty.json  : $([ -f "$PRETTY_DEST" ] && echo present || echo MISSING)"
 echo "  web-search.json : $([ -f "$WS_DEST" ] && echo present || echo MISSING)"
 
 if [ "$DRY_RUN" = 1 ]; then

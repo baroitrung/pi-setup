@@ -1,0 +1,17 @@
+{
+  "workingIndicator": {
+    "enabled": true,
+    "text": ["Working…"],
+    "mode": "shimmer",
+    "low": "#4d788e",
+    "mid": "#60a5fa",
+    "high": "#22d3ee",
+    "bold": true,
+    "sessionAccent": false,
+    "intervalMs": 33
+  },
+  "thinkingIndicator": {
+    "enabled": true,
+    "intervalMs": 33
+  }
+}

@@ -412,7 +412,9 @@ internal surfaces — a markdown transformer plus patches to Pi's `AssistantMess
 and `ToolExecutionComponent` — and every patch installs inside `session_start` behind
 `ctx.mode === "tui"`, so `pi -p`, RPC and `--export` are unaffected.
 
-Config lives in `~/.pi/agent/pi-pretty.json` (`PRETTY_*` environment variables win over it):
+Config lives in `~/.pi/agent/pi-pretty.json` (`PRETTY_*` environment variables win over it).
+This repo ships it as `config/pi-pretty.json`; `install.sh` installs it when absent and
+otherwise prints a diff — the live file is the one a person tunes:
 
 ```json
 { "icons": "none", "theme": "github-dark", "toolStyle": "default" }
@@ -538,8 +540,8 @@ frames; that displaced pi-pretty's frames, and because pi-pretty puts the **labe
 its frames** (pi's own message is blank in that mode), the row lost the words `Working…`
 and kept only the icon.
 
-Colours now come from `~/.pi/agent/pi-pretty.json`, which is machine-local (it is not part
-of this template):
+Colours now come from `~/.pi/agent/pi-pretty.json` — the same file `install.sh` seeds from
+`config/pi-pretty.json`:
 
 ```json
 {
