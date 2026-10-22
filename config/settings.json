@@ -4,6 +4,7 @@
   "tuiMode": "fullscreen",
   "hideThinkingBlock": true,
   "markdown": {
+    "codeBlockIndent": "",
     "mermaid": "streaming"
   },
   "quietStartup": true,

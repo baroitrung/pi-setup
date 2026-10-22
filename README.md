@@ -322,12 +322,17 @@ or `$think ➔ $work`, combining stages sequentially into a single pipeline prom
 
 These four extensions are plain TypeScript, loaded directly from
 `~/.pi/agent/extensions/`; the header and footer activate automatically in TUI mode.
-Tool rendering, code fences, skill chips, and summary cards are back to Pi's stock
-presentation — the custom versions were removed on 2026-10-21 and survive only in git
-history. The tool renderers stay stock from this repository's side: `pi-pigment` decorates
+Tool rendering, skill chips, and summary cards are back to Pi's stock presentation — the
+custom versions were removed on 2026-10-21 and survive only in git history. The tool
+renderers stay stock from this repository's side: `pi-pigment` decorates
 the same eight built-in renderers through `registerToolRenderer`, so it was reverted on
 2026-10-22. The one rendering package this setup carries instead is
 `@heyhuynhgiabuu/pi-pretty` (see below), which owns neither the header nor the footer.
+
+Code fences are Pi's renderer with one setting changed: `markdown.codeBlockIndent` is `""`,
+so blocks print flush-left instead of carrying the default two-space indent
+(`settings-manager.js` reads it with `??`, so an empty string is honoured rather than
+treated as unset).
 
 Editor cursor: `showHardwareCursor` is `true`, so Pi positions the terminal's own cursor
 (which also keeps IME composition anchored) instead of hiding it and painting a
@@ -406,19 +411,28 @@ Restart Pi or run `/reload` after changing the package selection.
 
 ### Message and tool rendering (pi-pretty)
 
-`@heyhuynhgiabuu/pi-pretty` styles what the TUI prints: an `❯` marker on user messages, a
-syntax-highlighted `read` preview, and re-registered `read`/`edit` tool rows. It hooks
-internal surfaces — a markdown transformer plus patches to Pi's `AssistantMessageComponent`
-and `ToolExecutionComponent` — and every patch installs inside `session_start` behind
-`ctx.mode === "tui"`, so `pi -p`, RPC and `--export` are unaffected.
+`@heyhuynhgiabuu/pi-pretty` styles what the TUI prints: a syntax-highlighted `read` preview,
+re-registered `read`/`edit` tool rows, and — with `toolStyle: "claudecode"` — a Claude
+Code-shaped transcript: a collapsed tool call is one `✓ Name (args)` row plus a `└` result
+row (spinner while running, `·` waiting, `✗` failed, `⊘` result lost), consecutive calls
+fold into `Done (…)` / `Running (…)` groups, hidden thinking reads `thought 3s`, and the
+input box drops its rounded border for plain rules with a flush-left `❯` (user messages
+lose their `❯` marker). It hooks internal surfaces — patches to Pi's
+`AssistantMessageComponent` / `ToolExecutionComponent` / chat `Container` — and every patch
+installs inside `session_start` behind `ctx.mode === "tui"`, so `pi -p`, RPC and `--export`
+are unaffected.
 
 Config lives in `~/.pi/agent/pi-pretty.json` (`PRETTY_*` environment variables win over it).
 This repo ships it as `config/pi-pretty.json`; `install.sh` installs it when absent and
 otherwise prints a diff — the live file is the one a person tunes:
 
 ```json
-{ "icons": "none", "theme": "github-dark", "toolStyle": "default" }
+{ "toolStyle": "claudecode" }
 ```
+
+Everything except `background.*` is read once at startup, so a config change needs a Pi
+**restart**, not just `/reload`. `toolStyle: "default"` keeps Pi's own tool rows; the
+`claudecode` value is the one this repo ships.
 
 `icons: "nerd"` is the default and needs a Nerd Font; `none` falls back to plain ASCII.
 `theme` only drives the `read` preview — `settings.json`'s `theme: "system"` is not a Shiki
@@ -545,6 +559,7 @@ Colours now come from `~/.pi/agent/pi-pretty.json` — the same file `install.sh
 
 ```json
 {
+  "toolStyle": "claudecode",
   "workingIndicator": {
     "enabled": true, "text": ["Working…"], "mode": "shimmer",
     "low": "#4d788e", "mid": "#60a5fa", "high": "#22d3ee",
