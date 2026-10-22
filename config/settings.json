@@ -7,6 +7,7 @@
     "mermaid": "streaming"
   },
   "quietStartup": true,
+  "showHardwareCursor": true,
   "packages": [
     "npm:pi-antigravity",
     "npm:pi-web-access",

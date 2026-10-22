@@ -84,6 +84,10 @@ assert(!sources.some((source) => source.includes("mitsuhiko/agent-stuff") || sou
 assert(!packageIds.some((id) => /powerline|slate|pi-coder|arnative|cc-extensions|footer/.test(id)),
 	"only custom-footer.ts owns the footer; no second footer/TUI suite may be installed");
 assert.equal(settings.theme, "system");
+// The cursor belongs to the terminal: Pi positions the hardware cursor (which also keeps
+// IME composition anchored) instead of hiding it and painting a reverse-video block.
+assert.equal(settings.showHardwareCursor, true,
+	"the terminal draws the cursor, not Pi's fake block cursor");
 assert.equal(settings.lastChangelogVersion, "1.4.0");
 assert.equal(settings.defaultProvider, "opencode-go");
 assert.equal(settings.defaultModel, "deepseek-v4.1-flash");
