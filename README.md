@@ -86,9 +86,10 @@ packages uninstalled on the machine have been removed from the repository
 `pi-permission-system`, `pi-extension`, `pi-xai-oauth`), along with uninstalled extension
 scripts/configs (`decision-compact.ts`, Devin client patch, `advisor.json`). Newly
 installed packages on the machine (`@narumitw/pi-goal`, `pi-subagents@0.77.0`) are synced
-into the template, and `pi-lens` stays listed as the trial it is. `pi-pigment` was added to
-the template on 2026-10-21 and reverted on 2026-10-22: it was never installed on the
-machine, so the template only carried drift. The default model is
+into the template. `pi-pigment` was added to the template on 2026-10-21 and reverted on
+2026-10-22: it was never installed on the machine, so the template only carried drift.
+`pi-lens` was dropped on 2026-10-22: too heavy for how little it was used, and it
+duplicated `pi-lsp-extension` with a second LSP client pool. The default model is
 `opencode-go/deepseek-v4.1-flash` with high
 thinking; `config/models.json` adds the session-affinity compat overrides that keep that
 proxy channel on one backend (credentials stay in `auth.json`).
@@ -353,7 +354,7 @@ After installing, run `/reload` in Pi to check both components visually.
 ## Packages
 
 `config/settings.json` lists the packages this setup keeps. Eight were measured
-against 158 sessions of real tool usage; two more are on trial (marked below):
+against 158 sessions of real tool usage; one more is on trial (marked below):
 
 | Package | Why it stays |
 | :--- | :--- |
@@ -365,7 +366,6 @@ against 158 sessions of real tool usage; two more are on trial (marked below):
 | `pi-lsp-extension@1.4.0` | `lsp_diagnostics` (151 calls), `code_overview`, `ast_search` |
 | `pi-subagents@0.77.0` | `subagent`, `bg_wait`, FleetView |
 | `@narumitw/pi-goal` | `goal_*` tools and `/goal` |
-| `pi-lens` *(trial)* | post-edit LSP/lint/format feedback; Java support needs `scripts/install-java-lsp.sh` |
 | `context-mode` *(trial)* | tool-output sandboxing + SQLite memory; overlaps `/rewind` and `pi-memory` |
 
 Dropped, and why they should not come back without a measurement:
@@ -375,41 +375,22 @@ Dropped, and why they should not come back without a measurement:
 - **`@latentminds/pi-quotas`, `pi-context-view`, `pi-session-recap`, `pi-simplify`,
   `pi-cache-optimizer`, `pi-diff-review`** — commands and UI only, zero measured use;
   quota and context state already show in the footer and `/antigravity.usage`.
+- **`pi-lens`** — dropped on 2026-10-22: too heavy for how little it was used. It shipped
+  its own LSP client pool, multi-language linters/formatters, tree-sitter grammars, four
+  skills and eleven tools, all duplicating `pi-lsp-extension` (`lsp_*`, `ast_search`,
+  `code_rewrite`, `code_overview`, and the same `jdtls` for Java).
 
 `pi-lsp-extension` still exposes eleven tools even though only diagnostics is used in
 practice; trimming that further means an active-tools filter, which this setup does
 not carry yet. LSP servers are installed separately (`typescript-language-server`
-plus `typescript` for JS/TS, `jdtls` for Java); without one, the tools fall back to
+plus `typescript` for JS/TS); without one, the tools fall back to
 tree-sitter analysis, which is not type checking.
 
-Two of these are on trial, and the overlap is real: `pi-lens` spawns its own LSP
-clients (so it duplicates `pi-lsp-extension`), and `context-mode` rewrites tool output
-and context (so it duplicates `/rewind` and `pi-memory`). Keep one per job once a real
-session shows which side wins.
+One trial is left, and its overlap is real: `context-mode` rewrites tool output and
+context, so it duplicates `/rewind` and `pi-memory`. Keep one per job once a real session
+shows which side wins. `pi-lens` already lost that bet and was dropped.
 
 Restart Pi or run `/reload` after changing the package selection.
-
-### Java language support (pi-lens)
-
-`scripts/install-java-lsp.sh` puts Eclipse JDT LS, `google-java-format`, and the
-Lombok agent on the machine. It matters because the versions are not interchangeable:
-JDT LS 1.64 bundles declare `osgi.ee JavaSE 25`, and with Java 21 the server exits 13
-with an OSGi resolution log. The script installs Java 25 **side by side**, leaving the
-project JDK pinned by mise (corretto-17) untouched, and only `jdtls` uses it.
-
-```bash
-bash scripts/install-java-lsp.sh     # idempotent; --force re-downloads
-```
-
-Layout: `~/.local/share/jdtls`, `~/.local/share/google-java-format/gjf.jar`,
-`~/.local/share/lombok/lombok.jar`, wrappers in `~/.local/bin/{jdtls,google-java-format}`.
-`pi-lens` finds the server as `$JDTLS_PATH || "jdtls"`, so PATH is enough. Lombok needs
-`PI_LENS_LOMBOK_JAR` in the shell (added to `~/.zshrc`), and is only applied when a
-project actually uses Lombok — pi-lens then boots JDT LS with `-javaagent:lombok.jar`.
-
-Verified without a Pi session: JDT LS answered `initialize` and returned a real
-diagnostic (`Type mismatch: cannot convert from String to int`) for a probe file, and
-`google-java-format` formatted it. In Pi, `/lens-health` shows the LSP pool.
 
 ### Parallel subagents and goals
 
@@ -464,7 +445,6 @@ pi-setup/
 │   └── rewind/                # /rewind
 ├── scripts/
 │   ├── get-secret.sh
-│   ├── install-java-lsp.sh
 │   └── test-custom-footer.mjs
 ├── setup/
 │   └── install.sh
