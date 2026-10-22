@@ -114,7 +114,7 @@ if [ ! -d "$PI_DIR" ]; then
 fi
 
 # --- Step 1: directories -----------------------------------------------------
-run mkdir -p "$PI_DIR/extensions" "$PI_DIR/scripts" "$PI_DIR/agents"
+run mkdir -p "$PI_DIR/extensions" "$PI_DIR/scripts" "$PI_DIR/agents" "$PI_DIR/themes"
 green "✓ Directories ready"
 
 # --- Step 2: extensions ------------------------------------------------------
@@ -145,6 +145,13 @@ echo ""
 echo "Agents"
 for f in "$REPO_DIR/agents/"*.md; do
   sync_file "$f" "$PI_DIR/agents/$(basename "$f")"
+done
+
+# --- Step 3c: themes ---------------------------------------------------------
+echo ""
+echo "Themes"
+for f in "$REPO_DIR/themes/"*.json; do
+  sync_file "$f" "$PI_DIR/themes/$(basename "$f")"
 done
 
 # --- Step 4: settings.json ---------------------------------------------------
@@ -209,7 +216,7 @@ else
   dim "    unchanged: ${WS_DEST/#$HOME/\~} (not touching your live config)"
 fi
 
-# --- Step 6: verify ----------------------------------------------------------
+# --- Step 7: verify ----------------------------------------------------------
 echo ""
 echo "Verification"
 echo "------------"
@@ -217,6 +224,7 @@ count_ext=$(find "$PI_DIR/extensions" -maxdepth 1 -name "*.ts" 2>/dev/null | wc 
 echo "  extensions/     : $count_ext TypeScript extensions"
 echo "  scripts/        : $(find "$PI_DIR/scripts" -maxdepth 1 -type f 2>/dev/null | wc -l | tr -d ' ') scripts"
 echo "  agents/         : $(find "$PI_DIR/agents" -maxdepth 1 -name "*.md" 2>/dev/null | wc -l | tr -d ' ') subagent profiles"
+echo "  themes/         : $(find "$PI_DIR/themes" -maxdepth 1 -name "*.json" 2>/dev/null | wc -l | tr -d ' ') custom themes"
 echo "  settings.json   : $([ -f "$SETTINGS_DEST" ] && echo present || echo MISSING)"
 echo "  models.json     : $([ -f "$MODELS_DEST" ] && echo present || echo MISSING)"
 echo "  web-search.json : $([ -f "$WS_DEST" ] && echo present || echo MISSING)"
