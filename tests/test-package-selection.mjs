@@ -24,12 +24,8 @@ const expected = [
 	"npm:pi-memory",
 	"npm:pi-subagents@0.77.0",
 	"npm:@narumitw/pi-goal",
-	// On trial (2026-10-21): pi-lens adds post-edit LSP/lint/format feedback on top of
-	// pi-lsp-extension's tools, at the cost of a second LSP client pool. Java support
-	// needs scripts/install-java-lsp.sh.
-	"npm:pi-lens",
-	// On trial (2026-10-21): context-mode for tool-output sandboxing. Neither trial has
-	// proven itself yet — see the dropped list below for what already lost that bet.
+	// On trial (2026-10-21): context-mode for tool-output sandboxing. It has not proven
+	// itself yet — see the dropped list below for what already lost that bet.
 	"npm:context-mode",
 ];
 assert.deepEqual([...sources].sort(), [...expected].sort(), "the package list is exactly the tracked set");
@@ -46,6 +42,11 @@ for (const dropped of [
 	"npm:pi-simplify",
 	"npm:pi-diff-review@0.1.27",
 	"npm:pi-condense",
+	// pi-lens (post-edit LSP/lint/format feedback, its own LSP client pool, four skills
+	// and eleven tools) was dropped on 2026-10-22: too heavy for how little it was used,
+	// and it duplicated pi-lsp-extension, which already carries lsp_*, ast_search,
+	// code_rewrite and code_overview and drives the same jdtls for Java.
+	"npm:pi-lens",
 	// pi-pigment (render-only decorators for the eight built-in tool renderers) was
 	// added to the template on 2026-10-21 and reverted on 2026-10-22. It hooks the
 	// same internal renderer surface that retired code-block.ts, and it was never
