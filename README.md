@@ -328,6 +328,13 @@ history. The tool renderers stay stock from this repository's side: `pi-pigment`
 the same eight built-in renderers through `registerToolRenderer`, so it was reverted on
 2026-10-22. The one rendering package this setup carries instead is
 `@heyhuynhgiabuu/pi-pretty` (see below), which owns neither the header nor the footer.
+
+Editor cursor: `showHardwareCursor` is `true`, so Pi positions the terminal's own cursor
+(which also keeps IME composition anchored) instead of hiding it and painting a
+reverse-video block. The shape therefore comes from the terminal — Ghostty runs
+`cursor-style = bar`, so the cursor is a vertical line. Change the shape in the terminal,
+or toggle the setting from `/settings`.
+
 Disable any file through `pi config` (or delete it) and `/reload` to change
 the look.
 
