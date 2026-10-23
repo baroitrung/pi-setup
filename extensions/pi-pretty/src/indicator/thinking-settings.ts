@@ -7,7 +7,6 @@ import { envFlag } from "./env.js";
 import { WORKING_INTERVAL_MS } from "./frames.js";
 import type { WorkingThemeLike } from "./types.js";
 
-
 // ─── Thinking label ───────────────────────────────────────────────────────────
 
 export interface ThinkingIndicatorSettings {
@@ -36,4 +35,3 @@ export function resolveThinkingIndicatorSettings(
 	else if (typeof config?.intervalMs === "number" && config.intervalMs >= 33) settings.intervalMs = config.intervalMs;
 	return settings;
 }
-

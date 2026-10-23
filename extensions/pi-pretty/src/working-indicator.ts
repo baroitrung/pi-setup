@@ -17,9 +17,9 @@
  */
 
 export * from "./indicator/frames.js";
-export * from "./indicator/settings.js";
-export * from "./indicator/palette.js";
-export * from "./indicator/thinking-settings.js";
-export * from "./indicator/thinking-label.js";
-export * from "./indicator/widget.js";
 export * from "./indicator/install.js";
+export * from "./indicator/palette.js";
+export * from "./indicator/settings.js";
+export * from "./indicator/thinking-label.js";
+export * from "./indicator/thinking-settings.js";
+export * from "./indicator/widget.js";

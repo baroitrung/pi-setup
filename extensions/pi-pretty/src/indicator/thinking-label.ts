@@ -12,8 +12,8 @@ import { dimAccentHex, hexToAnsiFg, sessionAccentHex } from "../session-color.js
 import { buildWorkingFrames, WORKING_INTERVAL_MS } from "./frames.js";
 import { colorToAnsi, FG_THINKING_FALLBACK, resolvePaletteAnsi } from "./palette.js";
 import type { WorkingIndicatorSettings } from "./settings.js";
-import type { ResolvedPalette, ThinkingUiLike } from "./types.js";
 import type { ThinkingIndicatorSettings } from "./thinking-settings.js";
+import type { ResolvedPalette, ThinkingUiLike } from "./types.js";
 
 // ─── Per-row hidden-thinking labels ──────────────────────────────────────────
 

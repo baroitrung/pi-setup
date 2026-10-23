@@ -12,6 +12,7 @@ import { join, parse, resolve } from "node:path";
 
 import type { FileFinder as FffFileFinder, GrepCursor } from "@ff-labs/fff-node";
 import type { CursorStore as CursorStoreShape, FffInitOptions } from "./types.js";
+
 // Re-exported so callers keep one import site for the FFF API surface.
 export type { FffInitOptions };
 
