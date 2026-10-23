@@ -5,9 +5,8 @@
  * editor's top border, and older hosts get the widget fallback.
  */
 
-import { FG_BLUE, FG_DIM, FG_MUTED } from "../config.js";
 import { dimAccentHex, hexToAnsiFg, sessionAccentHex } from "../session-color.js";
-import { buildWorkingFrames, WORKING_INTERVAL_MS } from "./frames.js";
+import { buildWorkingFrames } from "./frames.js";
 import { resolvePaletteAnsi } from "./palette.js";
 import type { WorkingIndicatorSettings } from "./settings.js";
 import type { WidgetTuiLike, WorkingThemeLike } from "./types.js";
@@ -87,7 +86,7 @@ export async function installWorkingIndicator(
 	const ansiResolved = resolvePaletteAnsi(settings.palette, ui.theme);
 	let ansi = ansiResolved;
 	let spinnerColor: string | undefined;
-	if (settings.sessionAccent && sessionName && !settings.tiersCustomized) {
+	if (settings.sessionAccent && sessionName && !settings.tiersCustomized && !settings.stops) {
 		const accentHex = sessionAccentHex(sessionName);
 		const accent = hexToAnsiFg(accentHex);
 		if (accent) {
@@ -98,6 +97,7 @@ export async function installWorkingIndicator(
 	const { frames, intervalMs } = buildWorkingFrames(texts, {
 		mode: settings.mode,
 		ansi,
+		stops: settings.stops,
 		bold: settings.bold,
 		spinnerColor,
 		intervalMs: settings.intervalMs,

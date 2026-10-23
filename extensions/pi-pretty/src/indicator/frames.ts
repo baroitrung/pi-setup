@@ -1,3 +1,4 @@
+import { gradientAnsiAt } from "./stops.js";
 import type { ResolvedPalette, WorkingIndicatorMode } from "./types.js";
 
 /**
@@ -19,6 +20,8 @@ const KITT_HEAD_HALF = 0.6;
 const KITT_TRAIL_LEN = 7;
 const TIER_HIGH = 0.65;
 const TIER_MID = 0.22;
+/** Below this intensity a cell keeps the resting colour in gradient mode. */
+const GRADIENT_FLOOR = 0.06;
 
 /** One cell per frame at 33ms = omp's 30 cells/second band speed. */
 export const WORKING_INTERVAL_MS = Math.round(1000 / 30);
@@ -89,6 +92,10 @@ export interface WorkingFrameOptions {
 	mode: WorkingIndicatorMode;
 	/** Resolved ANSI open sequences per tier. */
 	ansi: ResolvedPalette;
+	/** Optional multi-stop gradient (`#rrggbb`). When set, each cell is interpolated
+	 * continuously instead of snapping to one of the three tiers; `ansi.low` stays as
+	 * the resting colour so the text does not glare while the band is off-screen. */
+	stops?: readonly string[];
 	bold?: boolean;
 	spinner?: boolean;
 	/** Spinner glyph color; defaults to `ansi.low` (omp tints it with the dim accent). */
@@ -113,6 +120,7 @@ export function buildWorkingFrames(
 	const bold = options.bold ?? true;
 	const withSpinner = options.spinner ?? true;
 	const spinnerColor = options.spinnerColor ?? options.ansi.low;
+	const useGradient = (options.stops?.length ?? 0) >= 2;
 	const highOpen = bold ? `${BOLD_OPEN}${options.ansi.high}` : options.ansi.high;
 	const highClose = bold ? `${BOLD_CLOSE}${RESET_FG}` : RESET_FG;
 	const seq: Record<Tier, { open: string; close: string }> = {
@@ -125,6 +133,41 @@ export function buildWorkingFrames(
 		if (!withSpinner) return "";
 		const glyph = SPINNER_FRAMES[Math.floor(frameIndex / SPINNER_STEP) % SPINNER_FRAMES.length] ?? "";
 		return `${spinnerColor}${glyph}${RESET_FG} `;
+	};
+
+	/**
+	 * Continuous-gradient painter. `intensities` is the raw 0..1 curve for each cell;
+	 * cells below the visible threshold keep the resting colour.
+	 */
+	const paintGradient = (text: string, ranges: Array<[number, number]>, intensities: number[]): string => {
+		const total = ranges.length;
+		let out = "";
+		let runStart = 0;
+		let runColor: string | null = null;
+		let runIsRest = true;
+		const colorFor = (i: number): { ansi: string; rest: boolean } => {
+			const intensity = intensities[i] ?? 0;
+			if (intensity < GRADIENT_FLOOR) return { ansi: options.ansi.low, rest: true };
+			const ansi = gradientAnsiAt(options.stops ?? [], intensity);
+			return ansi ? { ansi, rest: false } : { ansi: options.ansi.low, rest: true };
+		};
+		const flush = (endIndex: number): void => {
+			if (runColor === null || endIndex <= runStart) return;
+			const chunk = text.slice(ranges[runStart]?.[0] ?? 0, ranges[endIndex - 1]?.[1] ?? 0);
+			// Only the bright part is bold; the resting text keeps the plain weight.
+			out += runIsRest ? `${runColor}${chunk}${RESET_FG}` : `${BOLD_OPEN}${runColor}${chunk}${BOLD_CLOSE}${RESET_FG}`;
+		};
+		for (let i = 0; i < total; i++) {
+			const { ansi, rest } = colorFor(i);
+			if (ansi !== runColor || rest !== runIsRest) {
+				flush(i);
+				runColor = ansi;
+				runIsRest = rest;
+				runStart = i;
+			}
+		}
+		flush(total);
+		return options.italic ? `${ITALIC_OPEN}${out}${ITALIC_CLOSE}` : out;
 	};
 
 	const paintFrame = (text: string, ranges: Array<[number, number]>, tiers: Tier[]): string => {
@@ -157,12 +200,17 @@ export function buildWorkingFrames(
 		const total = ranges.length;
 		if (total === 0) continue;
 
+		// With a gradient the raw intensity curve is painted per cell; without one the
+		// three tiers keep upstream's behaviour exactly.
+		const paint = (intensities: number[], tiers: Tier[]): string =>
+			useGradient ? paintGradient(text, ranges, intensities) : paintFrame(text, ranges, tiers);
+
 		if (options.mode === "static") {
 			// Static mode: one unanimated frame — only the first phrase renders.
+			const flat = Array.from({ length: total }, () => 1);
 			frames.push(
-				`${spinnerPrefix(spinnerIndex++)}${paintFrame(
-					text,
-					ranges,
+				`${spinnerPrefix(spinnerIndex++)}${paint(
+					flat,
 					Array.from({ length: total }, () => "mid" as Tier),
 				)}`,
 			);
@@ -172,10 +220,10 @@ export function buildWorkingFrames(
 		if (options.mode === "kitt") {
 			const range = total - 1;
 			if (range <= 0) {
+				const flat = Array.from({ length: total }, () => 1);
 				frames.push(
-					`${spinnerPrefix(spinnerIndex++)}${paintFrame(
-						text,
-						ranges,
+					`${spinnerPrefix(spinnerIndex++)}${paint(
+						flat,
 						Array.from({ length: total }, () => "high" as Tier),
 					)}`,
 				);
@@ -185,14 +233,14 @@ export function buildWorkingFrames(
 			for (let sweep = 0; sweep < cycleCells; sweep++) {
 				const goingRight = sweep < range;
 				const head = goingRight ? sweep : cycleCells - sweep;
-				const tiers = Array.from({ length: total }, (_, i) => tierFor(kittIntensity(i, head, goingRight)));
-				frames.push(`${spinnerPrefix(spinnerIndex++)}${paintFrame(text, ranges, tiers)}`);
+				const intensities = Array.from({ length: total }, (_, i) => kittIntensity(i, head, goingRight));
+				frames.push(`${spinnerPrefix(spinnerIndex++)}${paint(intensities, intensities.map(tierFor))}`);
 			}
 		} else {
 			const period = total + CLASSIC_PADDING * 2;
 			for (let pos = 0; pos < period; pos++) {
-				const tiers = Array.from({ length: total }, (_, i) => tierFor(classicIntensity(i, pos)));
-				frames.push(`${spinnerPrefix(spinnerIndex++)}${paintFrame(text, ranges, tiers)}`);
+				const intensities = Array.from({ length: total }, (_, i) => classicIntensity(i, pos));
+				frames.push(`${spinnerPrefix(spinnerIndex++)}${paint(intensities, intensities.map(tierFor))}`);
 			}
 		}
 	}

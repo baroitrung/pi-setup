@@ -66,6 +66,7 @@ function buildForLabel(
 	const { frames, intervalMs } = buildWorkingFrames([text], {
 		mode: settings.mode,
 		ansi: resolvePaletteAnsi(settings.palette, theme),
+		stops: settings.stops,
 		bold: settings.bold,
 		// Host labels already carry meaning in their text; a spinner would double up
 		// with whatever glyph the host was drawing.

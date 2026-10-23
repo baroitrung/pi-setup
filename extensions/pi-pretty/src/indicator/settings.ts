@@ -4,9 +4,9 @@
  * Values come from `pi-pretty.json`; environment variables win over the file.
  */
 
-import type { ThinkingIndicatorConfig, WorkingIndicatorConfig } from "../config.js";
+import type { WorkingIndicatorConfig } from "../config.js";
 import { envFlag } from "./env.js";
-import { WORKING_INTERVAL_MS } from "./frames.js";
+import { normalizeStops } from "./stops.js";
 import type { WorkingIndicatorMode } from "./types.js";
 
 // ─── Settings ────────────────────────────────────────────────────────────────
@@ -24,6 +24,8 @@ export interface WorkingIndicatorSettings {
 	texts: string[];
 	mode: WorkingIndicatorMode;
 	palette: WorkingIndicatorPalette;
+	/** Multi-stop gradient (`#rrggbb`, 2+). Absent means tiered colouring. */
+	stops?: string[];
 	bold: boolean;
 	/** @deprecated Retained for config compatibility; no interrupt hint is rendered. */
 	hint: boolean;
@@ -116,6 +118,8 @@ export function resolveWorkingIndicatorSettings(
 	const envInterval = Number.parseInt(env.PRETTY_WORKING_INTERVAL_MS ?? "", 10);
 	if (Number.isFinite(envInterval) && envInterval >= 33) settings.intervalMs = envInterval;
 	else if (typeof config?.intervalMs === "number" && config.intervalMs >= 33) settings.intervalMs = config.intervalMs;
+	const stops = normalizeStops(config?.stops);
+	if (stops) settings.stops = stops;
 	settings.tiersCustomized = typeof config?.mid === "string" || typeof config?.high === "string";
 	return settings;
 }

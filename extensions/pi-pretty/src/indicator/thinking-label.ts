@@ -7,9 +7,8 @@
  */
 
 import { keyText } from "@earendil-works/pi-coding-agent";
-import { FG_BLUE, FG_DIM, FG_MUTED } from "../config.js";
-import { dimAccentHex, hexToAnsiFg, sessionAccentHex } from "../session-color.js";
-import { buildWorkingFrames, WORKING_INTERVAL_MS } from "./frames.js";
+import { hexToAnsiFg, sessionAccentHex } from "../session-color.js";
+import { buildWorkingFrames } from "./frames.js";
 import { colorToAnsi, FG_THINKING_FALLBACK, resolvePaletteAnsi } from "./palette.js";
 import type { WorkingIndicatorSettings } from "./settings.js";
 import type { ThinkingIndicatorSettings } from "./thinking-settings.js";
@@ -225,7 +224,7 @@ export function createThinkingLabelAnimator(
 		...ansiResolved,
 		low: colorToAnsi("thinkingText", ui.theme, FG_THINKING_FALLBACK),
 	};
-	if (workSettings.sessionAccent && sessionName && !workSettings.tiersCustomized) {
+	if (workSettings.sessionAccent && sessionName && !workSettings.tiersCustomized && !workSettings.stops) {
 		const accent = hexToAnsiFg(sessionAccentHex(sessionName));
 		if (accent) ansi = { ...ansi, mid: accent, high: accent };
 	}
@@ -236,6 +235,7 @@ export function createThinkingLabelAnimator(
 		return buildWorkingFrames([text], {
 			mode: workSettings.mode,
 			ansi,
+			stops: workSettings.stops,
 			bold: workSettings.bold,
 			spinner: false,
 			italic: true,
