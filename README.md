@@ -93,19 +93,21 @@ duplicated `pi-lsp-extension` with a second LSP client pool. `@heyhuynhgiabuu/pi
 was installed the same day by choice and is synced here too, then vendored into
 `extensions/pi-pretty/` on 2026-10-23 so its renderer could be changed.
 
-**Default model differs between the template and the machine, on purpose.** The template
-pins `opencode-go/deepseek-v4.1-flash` with high thinking, because that provider's
-credential lives in `auth.json` and therefore works on any fresh clone.
-`config/models.json` adds the session-affinity compat overrides that keep that proxy
-channel on one backend.
+**Default model is `hive/deepseek-ai/deepseek-v4.1-flash-1017`** with high thinking, in
+both the template and on the machine.
 
-The machine defaults to `hive/deepseek-ai/deepseek-v4.1-flash-1017` instead. hive has no
-entry in `auth.json`; its key lives in `~/.env` and is read through
-`!$HOME/.pi/agent/scripts/get-secret.sh HIVE_API_KEY`, the same command-credential form
-the web-search providers use. Because the lookup falls back to `~/.env`, hive works with
-no shell export at all (verified with `env -i`), but it does need `~/.env` present — which
-is why the repo does not make it the template default. `install.sh` only reports the
-difference, never overwrites it.
+hive is a custom provider: `config/models.json` declares its endpoint and model list but
+**no `apiKey`**. The key lives in `auth.json`, entered once with `/login` — the same place
+`opencode-go` keeps its key, and the same reason neither is committed. `models.json` used
+to carry `apiKey: "$HIVE_API_KEY"`, which only resolved in the one shell that exported it;
+a `!get-secret.sh` command fixed that, and a stored credential replaced it afterwards.
+
+Because the credential comes from `auth.json` either way, a fresh clone needs one `/login`
+for hive before the default model resolves. `pi auth check --provider hive` reports
+readiness without printing the key.
+
+`config/models.json` also carries the `opencode-go` session-affinity compat overrides that
+keep that proxy channel on one backend.
 
 Orca-generated `orca-*` extensions stay machine-local and are managed by Orca.
 `herdr-agent-state.ts` is the same deal: herdr installs it and overwrites it on update.

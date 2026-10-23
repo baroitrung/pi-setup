@@ -95,8 +95,10 @@ assert.equal(cyanTheme.colors.accent, "cyan");
 assert.equal(settings.showHardwareCursor, true,
 	"the terminal draws the cursor, not Pi's fake block cursor");
 assert.equal(settings.lastChangelogVersion, "1.4.0");
-assert.equal(settings.defaultProvider, "opencode-go");
-assert.equal(settings.defaultModel, "deepseek-v4.1-flash");
+// Default is hive because its credential comes from auth.json via /login, exactly like
+// opencode-go's — neither is committed, so neither is more portable than the other.
+assert.equal(settings.defaultProvider, "hive");
+assert.equal(settings.defaultModel, "deepseek-ai/deepseek-v4.1-flash-1017");
 assert.equal(settings.defaultThinkingLevel, "high");
 assert(!Object.hasOwn(settings, "extensions"), "builtin MCP must not stay disabled now that the adapter is gone");
 assert(!Object.hasOwn(settings, "pi-browser-use"), "no browser config may linger in the template");
@@ -141,15 +143,14 @@ for (const [id, provider] of providers) {
 }
 assert(models.providers["opencode-go"]?.modelOverrides?.["deepseek-v4.1-flash"],
 	"the default model keeps its session-affinity override");
-// hive keeps its key in ~/.env, never in auth.json. It must therefore use a command
-// config value so the key is read at request time; a bare `$HIVE_API_KEY` used to fail in
-// every fresh terminal, because no rc file exported it.
+// hive is a custom provider whose credential lives in auth.json, configured once with
+// /login — the same place opencode-go keeps its key. models.json must therefore not carry
+// an apiKey for it: a second source would silently take over if auth.json lost the entry,
+// hiding the fact that nobody had logged in.
 const hive = models.providers.hive;
 if (hive) {
-	assert(typeof hive.apiKey === "string" && hive.apiKey.startsWith("!"),
-		"hive: apiKey must be a !command that reads ~/.env, not a bare $VAR no shell exports");
-	assert(hive.apiKey.includes("get-secret.sh"),
-		"hive: the !command must read the key through scripts/get-secret.sh");
+	assert(!Object.hasOwn(hive, "apiKey"),
+		"hive: no apiKey in models.json — the key belongs in auth.json via /login");
 }
-console.log("PASS: synced packages, standalone goal/subagents, opencode-go defaults, models.json compat, "
+console.log("PASS: synced packages, standalone goal/subagents, hive default, models.json compat, "
 	+ "browser autodetection, removed packages absent, no literal secrets");

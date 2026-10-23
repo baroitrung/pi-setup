@@ -4,7 +4,6 @@
     "hive": {
       "baseUrl": "https://api-cdn.thehive.ai/api/v3",
       "api": "openai-completions",
-      "apiKey": "!$HOME/.pi/agent/scripts/get-secret.sh HIVE_API_KEY",
       "models": [
         {
           "id": "deepseek-ai/deepseek-v4.1-flash-1017",
