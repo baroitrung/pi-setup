@@ -136,5 +136,11 @@ for (const [id, provider] of providers) {
 }
 assert(models.providers["opencode-go"]?.modelOverrides?.["deepseek-v4.1-flash"],
 	"the default model keeps its session-affinity override");
+// The hive provider was dropped on 2026-10-23: its key never lived in auth.json, only in
+// one shell's environment, so every new terminal failed to resolve the default model.
+assert(!Object.hasOwn(models.providers, "hive"),
+	"the hive provider must not come back: it has no credential in auth.json");
+assert(settings.defaultProvider !== "hive",
+	"the default provider must resolve without an ad-hoc environment variable");
 console.log("PASS: synced packages, standalone goal/subagents, opencode-go defaults, models.json compat, "
-	+ "browser autodetection, removed packages absent");
+	+ "browser autodetection, removed packages absent, no env-only providers");
