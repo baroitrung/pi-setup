@@ -11,11 +11,9 @@ import { homedir } from "node:os";
 import { join, parse, resolve } from "node:path";
 
 import type { FileFinder as FffFileFinder, GrepCursor } from "@ff-labs/fff-node";
-
-export interface FffInitOptions {
-	enableHomeDirScanning: boolean;
-	enableFsRootScanning: boolean;
-}
+import type { CursorStore as CursorStoreShape, FffInitOptions } from "./types.js";
+// Re-exported so callers keep one import site for the FFF API surface.
+export type { FffInitOptions };
 
 export type FffInitFailureKind = "restricted-base-path" | "native";
 export type FffRestrictedScanScope = "home" | "root";
@@ -48,7 +46,7 @@ const DEFAULT_FFF_INIT_OPTIONS: FffInitOptions = {
 // Cursor store — pagination cursors for grep
 // ---------------------------------------------------------------------------
 
-export class CursorStore {
+export class CursorStore implements CursorStoreShape {
 	private cursors = new Map<string, GrepCursor>();
 	private counter = 0;
 	private maxSize: number;

@@ -4,7 +4,6 @@
 
 import type { ConstrainedSamplingConfig, ImageContent, TextContent } from "@earendil-works/pi-ai";
 import type { AgentToolResult, CustomEditor } from "@earendil-works/pi-coding-agent";
-import type { FffInitOptions } from "./fff.js";
 
 // ---------------------------------------------------------------------------
 // Re-export FFF types needed by tools
@@ -169,6 +168,13 @@ export interface SdkTools {
 // ---------------------------------------------------------------------------
 // FFF service interfaces
 // ---------------------------------------------------------------------------
+
+/** Options for creating the FFF finder. Declared here so the type module does not
+ * depend on the implementation module; fff.ts imports it back. */
+export interface FffInitOptions {
+	enableHomeDirScanning: boolean;
+	enableFsRootScanning: boolean;
+}
 
 /** Minimal FFF service shape for tools that only need fileSearch. */
 export interface FffServiceLike {

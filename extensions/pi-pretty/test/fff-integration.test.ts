@@ -1,7 +1,7 @@
 /**
  * Tests for pi-pretty FFF integration vs SDK fallback.
  *
- * 1. Unit tests for CursorStore + fffFormatGrepText (extracted helpers)
+ * 1. Unit tests for CursorStore (fff.ts) + fffFormatGrepText (extracted helper)
  * 2. Integration tests via dependency injection (PiPrettyDeps)
  *    - SDK fallback path (no FFF)
  *    - FFF path (FFF injected)
@@ -14,7 +14,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createFffAutocompleteProvider } from "../src/autocomplete.js";
-import { CursorStore, fffFormatGrepText } from "../src/fff-helpers.js";
+import { fffFormatGrepText } from "../src/fff-helpers.js";
+import { CursorStore } from "../src/fff.js";
 import { resetSharedFffServiceForTests } from "../src/fff.js";
 import piPrettyExtension, { type PiPrettyDeps } from "../src/index.js";
 

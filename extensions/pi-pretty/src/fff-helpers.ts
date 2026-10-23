@@ -4,7 +4,7 @@
  * Pure functions and classes used by the FFF integration in index.ts.
  */
 
-import type { GrepCursor, GrepMatch } from "@ff-labs/fff-node";
+import type { GrepMatch } from "@ff-labs/fff-node";
 
 function sanitizeGrepRecordContent(text: string): string {
 	let content = text;
@@ -17,38 +17,6 @@ function sanitizeGrepRecordContent(text: string): string {
 function truncateGrepRecordContent(text: string): string {
 	const content = sanitizeGrepRecordContent(text);
 	return content.length > 500 ? `${content.slice(0, 500)}...` : content;
-}
-
-/**
- * Store for FFF grep pagination cursors.
- * Evicts oldest entry when exceeding maxSize.
- */
-export class CursorStore {
-	private cursors = new Map<string, GrepCursor>();
-	private counter = 0;
-	private maxSize: number;
-
-	constructor(maxSize = 200) {
-		this.maxSize = maxSize;
-	}
-
-	store(cursor: GrepCursor): string {
-		const id = `fff_c${++this.counter}`;
-		this.cursors.set(id, cursor);
-		if (this.cursors.size > this.maxSize) {
-			const first = this.cursors.keys().next().value;
-			if (first) this.cursors.delete(first);
-		}
-		return id;
-	}
-
-	get(id: string): GrepCursor | undefined {
-		return this.cursors.get(id);
-	}
-
-	get size(): number {
-		return this.cursors.size;
-	}
 }
 
 /**
