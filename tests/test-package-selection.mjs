@@ -27,11 +27,12 @@ const expected = [
 	// On trial (2026-10-21): context-mode for tool-output sandboxing. It has not proven
 	// itself yet — see the dropped list below for what already lost that bet.
 	"npm:context-mode",
-	// Added 2026-10-22 by choice: pi-pretty is the one rendering package this setup
-	// carries. It adds no tool of its own (it re-registers read/edit) and owns neither
-	// ctx.ui.setHeader nor ctx.ui.setFooter, so custom-banner.ts and custom-footer.ts
-	// keep their jobs.
-	"npm:@heyhuynhgiabuu/pi-pretty",
+	// Vendored 2026-10-23: pi-pretty was forked into extensions/pi-pretty so its
+	// renderer can be changed (working-indicator split, gradient work) without
+	// shipping a private npm package. Upstream v0.8.0, MIT. It adds no tool of its
+	// own (it re-registers read/edit) and owns neither ctx.ui.setHeader nor
+	// ctx.ui.setFooter, so custom-banner.ts and custom-footer.ts keep their jobs.
+	"extensions/pi-pretty",
 ];
 assert.deepEqual([...sources].sort(), [...expected].sort(), "the package list is exactly the tracked set");
 
@@ -103,17 +104,34 @@ assert(!sources.some((source) => source === "git:github.com/ttttmr/pi-devin-oaut
 	"the inactive Devin provider must not be reintroduced");
 assert(!Object.hasOwn(settings["pi-browser-use"] ?? {}, "executablePath"),
 	"shared browser config must use automatic discovery, not a machine-specific executablePath");
-// models.json carries compat overrides only; credentials stay in auth.json.
+// models.json may carry compat overrides for a built-in provider, or a whole custom
+// provider definition. Either way credentials never live here: a custom provider must
+// name an environment variable (`$VAR`), never a literal key.
 const providers = Object.entries(models.providers ?? {});
 assert(providers.length > 0, "models.json must configure at least one provider");
 for (const [id, provider] of providers) {
-	assert(provider.apiKey === undefined, `${id}: credentials must not be committed`);
-	assert(provider.baseUrl === undefined, `${id}: the provider endpoint comes from Pi, not the repo`);
-	const overrides = Object.entries(provider.modelOverrides ?? {});
-	assert(overrides.length > 0, `${id}: expected model-scoped compat overrides`);
-	for (const [model, override] of overrides) {
-		assert.deepEqual(Object.keys(override), ["compat"], `${id}/${model}: only compat may be overridden here`);
-		assert(override.compat.sendSessionAffinityHeaders === true, `${id}/${model}: session affinity stays enabled`);
+	if (provider.modelOverrides) {
+		assert(provider.apiKey === undefined, `${id}: override-only providers must not declare credentials`);
+		assert(provider.baseUrl === undefined, `${id}: the provider endpoint comes from Pi, not the repo`);
+		const overrides = Object.entries(provider.modelOverrides ?? {});
+		assert(overrides.length > 0, `${id}: expected model-scoped compat overrides`);
+		for (const [model, override] of overrides) {
+			assert.deepEqual(Object.keys(override), ["compat"], `${id}/${model}: only compat may be overridden here`);
+			assert(override.compat.sendSessionAffinityHeaders === true, `${id}/${model}: session affinity stays enabled`);
+		}
+		continue;
+	}
+	// Full custom provider: endpoint and model list are declared, the key is not.
+	assert(typeof provider.baseUrl === "string" && /^https:\/\//.test(provider.baseUrl),
+		`${id}: a custom provider needs an https baseUrl`);
+	if (provider.apiKey !== undefined) {
+		assert(/^\$[A-Z_][A-Z0-9_]*$/.test(provider.apiKey),
+			`${id}: apiKey must be an environment reference like $MY_KEY, not a literal secret`);
+	}
+	assert(Array.isArray(provider.models) && provider.models.length > 0,
+		`${id}: a custom provider needs at least one model entry`);
+	for (const model of provider.models) {
+		assert(typeof model.id === "string" && model.id.length > 0, `${id}: every model needs an id`);
 	}
 }
 assert(models.providers["opencode-go"]?.modelOverrides?.["deepseek-v4.1-flash"],

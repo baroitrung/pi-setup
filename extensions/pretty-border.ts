@@ -40,15 +40,15 @@ function editorUI(ctx: ExtensionContext): EditorUI {
 }
 
 const PROMPT_EDITOR_ENTRY = join(
-	homedir(), ".pi", "agent", "npm", "node_modules",
-	"@heyhuynhgiabuu", "pi-pretty", "dist", "prompt-editor.js",
+	homedir(), ".pi", "agent", "extensions",
+	"pi-pretty", "src", "prompt-editor.ts",
 );
 
 /**
  * The same editor pi-pretty builds, but boxed. Returns undefined when the package
  * (or its internal shape) is not what we expect — the caller then falls back.
  */
-async function resolveBoxedFactory(ctx: ExtensionContext): Promise<EditorFactory | undefined> {
+async function resolveBoxedFactory(pi: ExtensionAPI, ctx: ExtensionContext): Promise<EditorFactory | undefined> {
 	if (boxedFactoryResolved) return boxedFactory;
 	boxedFactoryResolved = true;
 	try {
@@ -56,11 +56,24 @@ async function resolveBoxedFactory(ctx: ExtensionContext): Promise<EditorFactory
 			createPromptEditorClass?: (base: unknown, paintIcon: (icon: string) => string, boxed: boolean) => new (...args: unknown[]) => EditorLike;
 		};
 		if (typeof mod.createPromptEditorClass !== "function") return undefined;
-		const theme = (ctx.ui as unknown as { theme?: { getThinkingBorderColor?: (level: string) => (icon: string) => string; fg?: (token: string, text: string) => string } }).theme;
-		const level = (ctx as unknown as { thinkingLevel?: string }).thinkingLevel ?? "off";
+		// Read the theme and thinking level at paint time, not at install time. The
+		// factory is resolved once (boxedFactoryResolved), so capturing here would pin
+		// the icon to whatever level was active on the first session_start and never
+		// follow /thinking changes until pi restarts.
+		const liveTheme = () => (ctx.ui as unknown as {
+			theme?: { getThinkingBorderColor?: (level: string) => (icon: string) => string; fg?: (token: string, text: string) => string };
+		}).theme;
+		const liveLevel = (): string => {
+			try {
+				return pi.getThinkingLevel() ?? "off";
+			} catch {
+				return (ctx as unknown as { thinkingLevel?: string }).thinkingLevel ?? "off";
+			}
+		};
 		const paintIcon = (icon: string): string => {
 			try {
-				if (theme && typeof theme.getThinkingBorderColor === "function") return theme.getThinkingBorderColor(level)(icon);
+				const theme = liveTheme();
+				if (theme && typeof theme.getThinkingBorderColor === "function") return theme.getThinkingBorderColor(liveLevel())(icon);
 				if (theme && typeof theme.fg === "function") return theme.fg("thinkingText", icon);
 			} catch {
 				// Fall through to the uncoloured icon.
@@ -101,7 +114,7 @@ function wrapFactory(current: EditorFactory): EditorFactory {
 
 type EnsureResult = "boxed" | "rounded" | "already" | "unsupported";
 
-async function ensure(ctx: ExtensionContext): Promise<EnsureResult> {
+async function ensure(pi: ExtensionAPI, ctx: ExtensionContext): Promise<EnsureResult> {
 	if (ctx.mode !== "tui") return "unsupported";
 	try {
 		const ui = editorUI(ctx);
@@ -110,7 +123,7 @@ async function ensure(ctx: ExtensionContext): Promise<EnsureResult> {
 		if (current && ours.has(current)) return "already";
 		if (current) baseline = current;
 
-		const boxed = await resolveBoxedFactory(ctx);
+		const boxed = await resolveBoxedFactory(pi, ctx);
 		if (boxed) {
 			ui.setEditorComponent(boxed);
 			return "boxed";
@@ -148,10 +161,10 @@ export default function (pi: ExtensionAPI) {
 	// extension order is not guaranteed, so retry briefly; `ensure` is idempotent and
 	// `agent_start` keeps our factory attached if theirs lands later.
 	const scheduleRetries = (ctx: ExtensionContext): void => {
-		void ensure(ctx);
+		void ensure(pi, ctx);
 		for (const delay of [50, 200, 600, 1500]) {
 			const timer = setTimeout(() => {
-				if (enabled) void ensure(ctx);
+				if (enabled) void ensure(pi, ctx);
 			}, delay);
 			if (typeof timer.unref === "function") timer.unref();
 		}
@@ -162,7 +175,7 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.on("agent_start", async (_event, ctx) => {
-		if (enabled) await ensure(ctx);
+		if (enabled) await ensure(pi, ctx);
 	});
 
 	pi.registerCommand("input-border", {
@@ -180,7 +193,7 @@ export default function (pi: ExtensionAPI) {
 
 			if (action === "on") {
 				enabled = true;
-				const result = await ensure(ctx);
+				const result = await ensure(pi, ctx);
 				if (result === "unsupported") ctx.ui.notify("No editor factory to take over yet — try again once the editor exists", "warning");
 				else if (result === "boxed") ctx.ui.notify("Boxed input installed: frame with the prompt inside", "info");
 				else ctx.ui.notify("Frame drawn, but pi-pretty's module was not loadable — prompt stays flush left", "warning");

@@ -1,0 +1,40 @@
+{
+	"background": {
+		"tool": "#1e1e2e",
+		"error": "#2a1e1e"
+	},
+	"theme": "github-dark",
+	"icons": "nerd",
+	"toolStyle": "default",
+	"userRail": "#3a3a4a",
+	"enableTools": [
+		"ls"
+	],
+	"disableTools": [],
+	"maxHlChars": 80000,
+	"maxPreviewLines": 80,
+	"cacheLimit": 128,
+	"fff": {
+		"enableHomeScanning": false,
+		"enableRootScanning": false
+	},
+	"workingIndicator": {
+		"enabled": true,
+		"text": [
+			"Working…",
+			"Thinking…",
+			"Pondering…"
+		],
+		"mode": "shimmer",
+		"low": "dim",
+		"mid": "muted",
+		"high": "accent",
+		"bold": true,
+		"sessionAccent": true,
+		"intervalMs": 33
+	},
+	"thinkingIndicator": {
+		"enabled": true,
+		"intervalMs": 33
+	}
+}

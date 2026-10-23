@@ -49,6 +49,30 @@ run() {
   fi
 }
 
+# Install a vendored extension's npm dependencies. Fresh first install is expected to
+# take a while (shiki + @shikijs/cli); repeat runs are near-instant thanks to the lock
+# file. Failures are reported but do not abort the whole setup: every other extension
+# still loads, and the user can rerun this script once the network is back.
+run_npm_install() {
+  local dir="$1"
+  [ -f "$dir/package.json" ] || return 0
+  if [ -d "$dir/node_modules" ] && [ -f "$dir/node_modules/.package-lock.json" ] \
+     && [ "$dir/package-lock.json" -ot "$dir/node_modules/.package-lock.json" ]; then
+    dim "    deps up to date: ${dir/#$HOME/\~}/"
+    return 0
+  fi
+  if ! command -v npm >/dev/null 2>&1; then
+    yellow "  ⚠  npm not found — run 'npm install --omit=dev --omit=peer' in ${dir/#$HOME/\~}/"
+    return 0
+  fi
+  if ( cd "$dir" && npm install --omit=dev --omit=peer --silent >/dev/null 2>&1 ); then
+    green "  ✓ deps installed: ${dir/#$HOME/\~}/"
+  else
+    yellow "  ⚠  npm install failed in ${dir/#$HOME/\~}/ — the extension may not load"
+  fi
+  return 0
+}
+
 backup() {
   local target="$1"
   [ -e "$target" ] || return 0
@@ -89,13 +113,15 @@ sync_file() {
 sync_tree() {
   local src="$1" dest="$2"
   [ -d "$src" ] || return 0
-  if [ -d "$dest" ] && diff -r -q "$src" "$dest" >/dev/null 2>&1; then
+  # Vendored extensions carry node_modules/ installed by this script; never copy or
+  # diff them (36MB of shiki + ffmpeg-grade deps, and the dest copy is rebuilt below).
+  if [ -d "$dest" ] && diff -r -q -x node_modules "$src" "$dest" >/dev/null 2>&1; then
     dim "    unchanged: ${dest/#$HOME/\~}/"
     return 0
   fi
   backup_tree "$dest"
   run mkdir -p "$dest"
-  run cp -a "$src/." "$dest/"
+  run rsync -a --exclude node_modules --exclude dist "$src/" "$dest/"
   green "  ✓ ${dest/#$HOME/\~}/"
   return 0
 }
@@ -124,11 +150,21 @@ echo "Extensions"
 for f in "$REPO_DIR/extensions/"*.ts; do
   sync_file "$f" "$PI_DIR/extensions/$(basename "$f")"
 done
-# Multi-file extensions are directories with an index.ts entry point.
+# Multi-file extensions are directories with an index.ts entry point, or a
+# package.json declaring `pi.extensions` (vendored packages such as pi-pretty).
 for d in "$REPO_DIR/extensions/"*/; do
-  [ -f "${d}index.ts" ] || continue
+  [ -f "${d}index.ts" ] || [ -f "${d}package.json" ] || continue
   name="$(basename "$d")"
   sync_tree "$d" "$PI_DIR/extensions/$name"
+  # Vendored packages declare real npm dependencies; pi resolves shiki/@shikijs/cli
+  # from the extension's own node_modules, so install them where they now live.
+  if [ -f "${d}package.json" ]; then
+    if [ "$DRY_RUN" = 1 ]; then
+      dim "    [dry-run] npm install --omit=dev --omit=peer in extensions/$name/"
+    elif [ -f "$PI_DIR/extensions/$name/package.json" ]; then
+      run_npm_install "$PI_DIR/extensions/$name"
+    fi
+  fi
 done
 
 # --- Step 3: scripts ---------------------------------------------------------
