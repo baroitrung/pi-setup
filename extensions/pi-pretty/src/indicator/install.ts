@@ -10,17 +10,10 @@ import { dimAccentHex, hexToAnsiFg, sessionAccentHex } from "../session-color.js
 import { buildWorkingFrames, WORKING_INTERVAL_MS } from "./frames.js";
 import { resolvePaletteAnsi } from "./palette.js";
 import type { WorkingIndicatorSettings } from "./settings.js";
-import type { WidgetTuiLike } from "./types.js";
+import type { WidgetTuiLike, WorkingThemeLike } from "./types.js";
 import { WorkingWidget } from "./widget.js";
 
 // ─── Installation ────────────────────────────────────────────────────────────
-
-/** Structural slice of pi's Theme needed for the palette and thinking label. */
-export interface WorkingThemeLike {
-	/** Retained for compatibility with older theme adapters. */
-	fg?: (name: "dim", text: string) => string;
-	getFgAnsi?: (name: "dim" | "muted" | "accent" | "thinkingText") => string;
-}
 
 export interface WorkingStatusOptionsLike {
 	frames?: string[];

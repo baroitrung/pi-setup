@@ -29,23 +29,23 @@ import {
 } from "../claude-style.js";
 import { getDefaultAgentDir, loadConfig, type PrettyConfig } from "../config.js";
 import { type FffInitOptions, type FffService, isFffRestrictedBasePathError } from "../fff.js";
+import { installGradientLabels, uninstallGradientLabels } from "../indicator/gradient.js";
 import { createPromptEditorClass } from "../prompt-editor.js";
 import type { PiPrettyDeps } from "../types.js";
 import { installUserRail, setUserRail } from "../user-rail.js";
 import {
 	createThinkingLabelAnimator,
 	createThinkingTimer,
-	formatThinkingDuration,
 	installPerRowThinkingLabels,
 	installWorkingIndicator,
 	type PerRowThinkingLabels,
 	resolveThinkingIndicatorSettings,
 	resolveWorkingIndicatorSettings,
-	setClaudeThinkingLabels,
 	type ThinkingTimer,
 	thinkingBlockActive,
 	WORKING_INTERVAL_MS,
 	type WorkingIndicatorController,
+	type WorkingThemeLike,
 } from "../working-indicator.js";
 
 type EditorFactory = Parameters<ExtensionContext["ui"]["setEditorComponent"]>[0];
@@ -168,6 +168,16 @@ export function installSessionLifecycle(options: SessionLifecycleOptions): void 
 	pi.on("session_start", async (_event: unknown, ctx: ExtensionContext) => {
 		if (ctx.mode === "tui") {
 			setClaudeStyleTheme(ctx.ui.theme);
+			// Host-written status labels (compacting, retry, summarize, and the plain
+			// "Working (… to interrupt)" restored after a reload) bypass pi-pretty's
+			// frames and arrive as one flat colour. Route them through the same frame
+			// builder so every label in the row animates the same way.
+			installGradientLabels({
+				settings: workingSettings,
+				// Read through ctx, not a captured theme: /theme swaps the object and
+				// the palette must follow without a restart.
+				getTheme: () => ctx.ui.theme as unknown as WorkingThemeLike,
+			});
 			installClaudeChatGrouping(claudeStyle);
 			installClaudeExternalToolRenderers(hostSdk.ToolExecutionComponent, claudeStyle);
 			installPromptEditor(ctx);
@@ -385,6 +395,7 @@ export function installSessionLifecycle(options: SessionLifecycleOptions): void 
 		perRowLabels = undefined;
 		thinkingElapsedMs.clear();
 		workingStreaming = false;
+		uninstallGradientLabels();
 		resetClaudeStyleSessionState();
 		// Intentionally keep the native FFF finder on session shutdown.
 		// Pi can emit shutdown/start during resume or session switching while the
