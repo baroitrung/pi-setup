@@ -76,7 +76,11 @@ run_npm_install() {
 backup() {
   local target="$1"
   [ -e "$target" ] || return 0
-  run cp -r "$target" "${target}.backup.${TIMESTAMP}"
+  if [ "$DRY_RUN" = 1 ]; then
+    dim "    [dry-run] would back up: ${target/#$HOME/\~}.backup.${TIMESTAMP}"
+    return 0
+  fi
+  cp -r "$target" "${target}.backup.${TIMESTAMP}"
   yellow "    backed up: ${target/#$HOME/\~}"
 }
 
@@ -87,8 +91,12 @@ backup_tree() {
   local target="$1" dest
   [ -e "$target" ] || return 0
   dest="$PI_DIR/backups/extensions/$(basename "$target").${TIMESTAMP}"
-  run mkdir -p "$(dirname "$dest")"
-  run cp -a "$target" "$dest"
+  if [ "$DRY_RUN" = 1 ]; then
+    dim "    [dry-run] would back up: ${dest/#$HOME/\~}"
+    return 0
+  fi
+  mkdir -p "$(dirname "$dest")"
+  cp -a "$target" "$dest"
   yellow "    backed up: ${dest/#$HOME/\~}"
 }
 
@@ -115,7 +123,7 @@ sync_tree() {
   [ -d "$src" ] || return 0
   # Vendored extensions carry node_modules/ installed by this script; never copy or
   # diff them (36MB of shiki + ffmpeg-grade deps, and the dest copy is rebuilt below).
-  if [ -d "$dest" ] && diff -r -q -x node_modules "$src" "$dest" >/dev/null 2>&1; then
+  if [ -d "$dest" ] && diff -r -q -x node_modules -x dist "$src" "$dest" >/dev/null 2>&1; then
     dim "    unchanged: ${dest/#$HOME/\~}/"
     return 0
   fi
@@ -159,9 +167,12 @@ for d in "$REPO_DIR/extensions/"*/; do
   # Vendored packages declare real npm dependencies; pi resolves shiki/@shikijs/cli
   # from the extension's own node_modules, so install them where they now live.
   if [ -f "${d}package.json" ]; then
-    if [ "$DRY_RUN" = 1 ]; then
+    if [ -f "$PI_DIR/extensions/$name/node_modules/.package-lock.json" ] \
+       && [ ! "${d}package-lock.json" -nt "$PI_DIR/extensions/$name/node_modules/.package-lock.json" ]; then
+      dim "    unchanged: deps for extensions/$name/"
+    elif [ "$DRY_RUN" = 1 ]; then
       dim "    [dry-run] npm install --omit=dev --omit=peer in extensions/$name/"
-    elif [ -f "$PI_DIR/extensions/$name/package.json" ]; then
+    else
       run_npm_install "$PI_DIR/extensions/$name"
     fi
   fi
