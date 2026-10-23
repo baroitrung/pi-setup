@@ -1,6 +1,29 @@
 {
   "$schema": "https://pi.dev/schemas/models.schema.json",
   "providers": {
+    "hive": {
+      "baseUrl": "https://api-cdn.thehive.ai/api/v3",
+      "api": "openai-completions",
+      "apiKey": "!$HOME/.pi/agent/scripts/get-secret.sh HIVE_API_KEY",
+      "models": [
+        {
+          "id": "deepseek-ai/deepseek-v4.1-flash-1017",
+          "name": "Deepseek 4.1 Flash",
+          "reasoning": true,
+          "input": [
+            "text",
+            "image"
+          ],
+          "contextWindow": 1000000,
+          "maxTokens": 32768,
+          "compat": {
+            "supportsDeveloperRole": false,
+            "supportsReasoningEffort": false,
+            "maxTokensField": "max_tokens"
+          }
+        }
+      ]
+    },
     "opencode-go": {
       "modelOverrides": {
         "deepseek-v4.1-flash": {

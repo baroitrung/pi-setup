@@ -25,10 +25,10 @@ bash setup/install.sh --dry-run
 | `extensions/*.ts` | `~/.pi/agent/extensions/` | Gradient banner, compact statusline/tool calls, `$skill` autocomplete |
 | `extensions/account-pool/` | `~/.pi/agent/extensions/account-pool/` | Multi-file extension: Antigravity account pool with per-model cooldown (`/pool`) |
 | `extensions/rewind/` | `~/.pi/agent/extensions/rewind/` | Multi-file extension: trim old tool results from the model context (`/rewind`) |
-| `scripts/get-secret.sh` | `~/.pi/agent/scripts/` | Reads one key from `~/.env`; mode `700` |
+| `scripts/get-secret.sh` | `~/.pi/agent/scripts/` | Reads one key: exported variable first, then `~/.env`; mode `700` |
 | `agents/*.md` | `~/.pi/agent/agents/` | Subagent profiles (agent frontmatter + prompt) |
 | `config/settings.json` | `~/.pi/agent/settings.json` | Installed only if absent — otherwise diffed |
-| `config/models.json` | `~/.pi/agent/models.json` | Provider/model compat overrides; credentials stay in `auth.json` |
+| `config/models.json` | `~/.pi/agent/models.json` | Provider/model overrides; no literal keys — credentials come from `auth.json` or `!get-secret.sh` |
 | `config/web-search.example.json` | `~/.pi/agent/web-search.json` | Same rule; **this is an example, edit it** |
 
 `install.sh` is idempotent. It copies a file only when the contents differ, and
@@ -90,10 +90,22 @@ into the template. `pi-pigment` was added to the template on 2026-10-21 and reve
 2026-10-22: it was never installed on the machine, so the template only carried drift.
 `pi-lens` was dropped on 2026-10-22: too heavy for how little it was used, and it
 duplicated `pi-lsp-extension` with a second LSP client pool. `@heyhuynhgiabuu/pi-pretty`
-was installed the same day by choice and is synced here too. The default model is
-`opencode-go/deepseek-v4.1-flash` with high
-thinking; `config/models.json` adds the session-affinity compat overrides that keep that
-proxy channel on one backend (credentials stay in `auth.json`).
+was installed the same day by choice and is synced here too, then vendored into
+`extensions/pi-pretty/` on 2026-10-23 so its renderer could be changed.
+
+**Default model differs between the template and the machine, on purpose.** The template
+pins `opencode-go/deepseek-v4.1-flash` with high thinking, because that provider's
+credential lives in `auth.json` and therefore works on any fresh clone.
+`config/models.json` adds the session-affinity compat overrides that keep that proxy
+channel on one backend.
+
+The machine defaults to `hive/deepseek-ai/deepseek-v4.1-flash-1017` instead. hive has no
+entry in `auth.json`; its key lives in `~/.env` and is read through
+`!$HOME/.pi/agent/scripts/get-secret.sh HIVE_API_KEY`, the same command-credential form
+the web-search providers use. Because the lookup falls back to `~/.env`, hive works with
+no shell export at all (verified with `env -i`), but it does need `~/.env` present — which
+is why the repo does not make it the template default. `install.sh` only reports the
+difference, never overwrites it.
 
 Orca-generated `orca-*` extensions stay machine-local and are managed by Orca.
 `herdr-agent-state.ts` is the same deal: herdr installs it and overwrites it on update.
@@ -108,13 +120,25 @@ was launched with, so you have to restart before a new key is visible.
 
 This setup avoids that. `get-secret.sh` reads a key from `~/.env` on demand:
 
+The lookup order is: an exported variable first, then the file. So a one-off
+`HIVE_API_KEY=... pi` overrides the stored key without editing `~/.env`, and a
+key you keep in `~/.env` works with no shell setup at all:
+
 ```sh
 #!/bin/sh
 # Usage: get-secret.sh KEY_NAME [ENV_FILE]
 key="$1"
 file="${2:-$HOME/.env}"
+case "$key" in *[!A-Za-z0-9_]* | [0-9]* | "") exit 2 ;; esac   # no regex, no eval
+
+value=$(printenv "$key" 2>/dev/null) && [ -n "$value" ] && { printf '%s\n' "$value"; exit 0; }
+[ -f "$file" ] || exit 3
 sed -n "s/^${key}=//p" "$file" | head -1 | sed -e "s/^'//" -e "s/'$//" -e 's/^"//' -e 's/"$//'
 ```
+
+`tests/test-get-secret.mjs` locks that contract down: env beats file, empty env
+falls through, quotes are stripped, and bad key names exit 2 instead of reaching
+`sed` as a regex.
 
 Pi's web-access extension supports a **command credential source**: a config
 value starting with `!` is run as a shell command, and its stdout becomes the

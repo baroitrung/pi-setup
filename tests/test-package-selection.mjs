@@ -125,8 +125,13 @@ for (const [id, provider] of providers) {
 	assert(typeof provider.baseUrl === "string" && /^https:\/\//.test(provider.baseUrl),
 		`${id}: a custom provider needs an https baseUrl`);
 	if (provider.apiKey !== undefined) {
-		assert(/^\$[A-Z_][A-Z0-9_]*$/.test(provider.apiKey),
-			`${id}: apiKey must be an environment reference like $MY_KEY, not a literal secret`);
+		// pi resolves two non-literal forms: `$VAR` (read from the process environment)
+		// and `!command` (run it, use stdout). Anything else would be a committed secret.
+		const isEnvRef = /^\$\{?[A-Z_][A-Z0-9_]*\}?$/.test(provider.apiKey);
+		const isCommand = provider.apiKey.startsWith("!");
+		assert(isEnvRef || isCommand,
+			`${id}: apiKey must be $MY_KEY or !command, never a literal secret`);
+		assert(!/^(sk-|ghp_|AIza)/.test(provider.apiKey), `${id}: apiKey looks like a literal secret`);
 	}
 	assert(Array.isArray(provider.models) && provider.models.length > 0,
 		`${id}: a custom provider needs at least one model entry`);
@@ -136,11 +141,15 @@ for (const [id, provider] of providers) {
 }
 assert(models.providers["opencode-go"]?.modelOverrides?.["deepseek-v4.1-flash"],
 	"the default model keeps its session-affinity override");
-// The hive provider was dropped on 2026-10-23: its key never lived in auth.json, only in
-// one shell's environment, so every new terminal failed to resolve the default model.
-assert(!Object.hasOwn(models.providers, "hive"),
-	"the hive provider must not come back: it has no credential in auth.json");
-assert(settings.defaultProvider !== "hive",
-	"the default provider must resolve without an ad-hoc environment variable");
+// hive keeps its key in ~/.env, never in auth.json. It must therefore use a command
+// config value so the key is read at request time; a bare `$HIVE_API_KEY` used to fail in
+// every fresh terminal, because no rc file exported it.
+const hive = models.providers.hive;
+if (hive) {
+	assert(typeof hive.apiKey === "string" && hive.apiKey.startsWith("!"),
+		"hive: apiKey must be a !command that reads ~/.env, not a bare $VAR no shell exports");
+	assert(hive.apiKey.includes("get-secret.sh"),
+		"hive: the !command must read the key through scripts/get-secret.sh");
+}
 console.log("PASS: synced packages, standalone goal/subagents, opencode-go defaults, models.json compat, "
-	+ "browser autodetection, removed packages absent, no env-only providers");
+	+ "browser autodetection, removed packages absent, no literal secrets");
