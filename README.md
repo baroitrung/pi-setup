@@ -85,7 +85,7 @@ packages uninstalled on the machine have been removed from the repository
 (`pi-devin-local`, `agent-stuff`, `pi-advisor-flow`, `pi-smart-fetch`,
 `pi-permission-system`, `pi-extension`, `pi-xai-oauth`), along with uninstalled extension
 scripts/configs (`decision-compact.ts`, Devin client patch, `advisor.json`). Newly
-installed packages on the machine (`@narumitw/pi-goal`, `pi-subagents@0.77.0`) are synced
+installed packages on the machine (`@narumitw/pi-goal`, `pi-subagents@0.81.0`) are synced
 into the template. `pi-pigment` was added to the template on 2026-10-21 and reverted on
 2026-10-22: it was never installed on the machine, so the template only carried drift.
 `pi-lens` was dropped on 2026-10-22: too heavy for how little it was used, and it
@@ -393,7 +393,7 @@ against 158 sessions of real tool usage; `context-mode` is still on trial and
 | `@juicesharp/rpiv-ask-user-question` | `ask_user_question` (36 calls) |
 | `pi-memory` | six `memory_*` tools plus `scratchpad` |
 | `pi-lsp-extension@1.4.0` | `lsp_diagnostics` (151 calls), `code_overview`, `ast_search` |
-| `pi-subagents@0.77.0` | `subagent`, `bg_wait`, FleetView |
+| `pi-subagents@0.81.0` | `subagent`, `bg_wait`, FleetView |
 | `@narumitw/pi-goal` | `goal_*` tools and `/goal` |
 | `context-mode` *(trial)* | tool-output sandboxing + SQLite memory; overlaps `/rewind` and `pi-memory` |
 | `@heyhuynhgiabuu/pi-pretty` | message and tool rendering (see below); re-registers `read`/`edit`, owns no header or footer |
@@ -458,7 +458,7 @@ Remove it with `pi remove npm:@heyhuynhgiabuu/pi-pretty` and drop the template e
 
 ### Parallel subagents and goals
 
-- `npm:pi-subagents@0.77.0`: parallel/background delegation and FleetView.
+- `npm:pi-subagents@0.81.0`: parallel/background delegation and FleetView.
   Use `/subagents-fleet` to inspect runs. Keep only one subagent implementation
   enabled.
 - `npm:@narumitw/pi-goal`: the selected standalone goal package, replacing the

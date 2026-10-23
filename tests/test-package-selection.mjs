@@ -22,7 +22,7 @@ const expected = [
 	"npm:@juicesharp/rpiv-todo",
 	"npm:pi-lsp-extension@1.4.0",
 	"npm:pi-memory",
-	"npm:pi-subagents@0.77.0",
+	"npm:pi-subagents@0.81.0",
 	"npm:@narumitw/pi-goal",
 	// On trial (2026-10-21): context-mode for tool-output sandboxing. It has not proven
 	// itself yet — see the dropped list below for what already lost that bet.
